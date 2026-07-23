@@ -1,0 +1,25 @@
+{
+  "name": "@ha7ch/ai-native-company",
+  "version": "0.0.0",
+  "description": "把你的团队变成 AI native company:一台 Mac mini,一人一个 bot,公司知识全在 markdown 里。One Mac mini, one bot per person, all company knowledge in markdown.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/HA7CH/ai-native-company.git"
+  },
+  "homepage": "https://github.com/HA7CH/ai-native-company#readme",
+  "keywords": [
+    "ai-native",
+    "agent",
+    "claude-code",
+    "codex",
+    "feishu",
+    "lark",
+    "dingtalk",
+    "wecom",
+    "cc-connect",
+    "company",
+    "bot"
+  ],
+  "private": true
+}
