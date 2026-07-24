@@ -66,7 +66,7 @@ templates/           # 数据录入模板(复制→填→写入)
 
 - **根 CLAUDE.md** 必须包含:① 公司一句话简介;② 「问题类型 → 文件」路由表(按问题 2 生成);③ 三条纪律:先按表定位再搜索、查不到就说「尚未入库」不编造、易变事实只在 canonical 文件维护。
 - **CONTRIBUTING.md**:frontmatter 规范(`title` / `source_file` / `updated`)、目录与命名约定、「原件进 `_originals/`,结构化 markdown 指回原件」。
-- **技能正文上载**:把本技能目录(`~/.claude/skills/anc-onboard/`)下 `vault-skills/` 里的每个 `<name>.md`,按需结合访谈结果做行业定制(尤其入库规范相关表述),写入 vault 的 `skills/<name>/SKILL.md`。约定:正文第一个标题下方保留一行 `触发词:…`(anc-join 生成名片时从这行取 description)。技能正文从此以 vault 为唯一真相:后续改技能 = 改 vault,全员即时生效。
+- **技能正文上载**:把本技能目录(`~/.claude/skills/anc-onboard/`)下 `vault-skills/` 里的每个 `<name>.md`,按需结合访谈结果做行业定制(尤其入库规范相关表述),写入 vault 的 `skills/<name>/SKILL.md`。**硬约定(anc-join 生成名片依赖)**:正文第一个标题下方必须保留两行——`触发词:…` 与 `简介:…`,各自单行、非空、≤200 字;上载前逐个自检,缺了就补。技能正文从此以 vault 为唯一真相:后续改技能 = 改 vault,全员即时生效。
 - 其余文件按访谈内容填,没问到的字段写 `TBC`。
 
 ### 4. 收尾清单(打印给用户)

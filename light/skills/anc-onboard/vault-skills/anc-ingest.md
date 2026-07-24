@@ -1,6 +1,7 @@
 # anc-ingest:文件 → 结构化 markdown → 入库
 
 触发词:入库、归档、把这个存进公司库、这份文件入库、ingest、archive to vault、存档。
+简介:把手头文件结构化入库到公司共享 vault——本地读 PDF/表格/图片,按公司规范抽取成 markdown,原件与结构化文档一起写入,全员立即可查。
 
 > 本文件是技能正文,住在公司 vault(`skills/anc-ingest/SKILL.md`),由每人本地的「名片」在调用时实时读取——改这里,全员下一次使用即生效。onboarding 时可按公司行业定制本文(尤其入库规范相关步骤)。
 
