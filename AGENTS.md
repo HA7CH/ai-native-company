@@ -39,6 +39,6 @@
 - 转公开检查(repo 转 public 前必跑):
   ```bash
   git ls-files _research/   # 必须为空
-  git grep -rniE 'climaxmac|tailscale|tail7d673e|100\.(106|83)\.|climaxracing|ou_[a-z0-9]|oc_[a-z0-9]|cli_[a-z0-9]|app_secret' -- '*.md' '*.json' '*.ts'   # 必须零命中
+  git grep -rniE 'climaxmac|tailscale|tail7d673e|100\.(106|83)\.|climaxracing|ou_[a-z0-9]|oc_[a-z0-9]|cli_[a-z0-9]|app_secret *= *"[^$]' -- '*.md' '*.json' '*.ts' | grep -v 'git grep -rniE'   # 必须零命中(app_secret 只抓明文赋值,字段名引用与 ${ENV} 形态放行;文档示例占位符用 ou_*** / cli_***;末段过滤本检查行自身)
   ```
 - 涉及 reference deployment 的表述只写通用化 lessons learned,不写可定位到具体在跑机器的攻击面线索(措辞用设计约束时态,如「一律不授予」,不用「已整改/待整改」)。
