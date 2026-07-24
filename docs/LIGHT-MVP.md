@@ -39,6 +39,10 @@
 - 托管形态的 IM bot 将来连的也是同一个 vault(mini 上的 bot 是它的另一个客户端);
 - 轻形态覆盖不了的三样留给托管形态:IM 里可被 @ 的公司 bot、不用 Claude Code 的同事、无人值守定时任务。
 
+## 自带账号原则(infra,不是 SaaS)
+
+每家公司把 vault 服务部署在**自己的 Cloudflare 账号**里(注册免费,R2 免费额度内基本零成本):bucket、VAULT_TOKEN、Worker 全归公司,数据主权完整,我们不运营任何中心端、不经手任何公司数据。onboarding checklist 的第一步就是「注册/登录你们自己的 Cloudflare 账号」——与托管形态「一台你们自己的 Mac mini」是同一条哲学:**运行时永远在客户自己手里,我们只提供蓝图和工具。**
+
 ## MVP 边界与下一步
 
 1. **鉴权**:现在一司一 token → 下一步 per-member token(写入身份可信)乃至 Cloudflare Access/OAuth。

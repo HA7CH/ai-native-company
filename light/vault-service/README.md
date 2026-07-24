@@ -9,6 +9,8 @@
 
 ## 部署(每家公司一次,约 5 分钟)
 
+> **自带账号原则**:部署用的是**你们公司自己的 Cloudflare 账号**(没有就去 dash.cloudflare.com 免费注册,并在侧栏开通 R2)。bucket、token、数据全部归公司自己;这是 infra 不是 SaaS——没有中心服务端,本仓库作者不经手、也无法访问任何公司的数据。
+
 ```bash
 cd light/vault-service
 npm ci
