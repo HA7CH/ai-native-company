@@ -23,9 +23,11 @@
 | Claude Cowork / Managed Agents | ⚠️ | ❌ | ❌ | ✅ | ⚠️ | ⚠️ | ✅ | ❌ | ❌ | ❌ |
 | Microsoft Agent 365 | ❌ | ✅ | ❌ | ❌ | ❌ | ❌ | ❌ | ⚠️ | ⚠️ | ❌ |
 | Every Plus Ones | ❌ | ✅ | ❌ | ❌ | ⚠️ | ✅ | ❌ | ❌ | ❌ | ❌ |
+| WorkBuddy(腾讯,2026-03)* | ⚠️ | ✅ | ✅ | ❌ | ⚠️ | ⚠️ | ❌ | ❌ | ⚠️ | ❌ |
 | **ai-native-company(目标)** | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
 
 \* OpenClaw 的订阅路径 2026-04 被 Anthropic 切断(见 §4)。
+\* WorkBuddy:腾讯桌面 AI agent 工作台(OpenClaw-like),2026-03 上线 90 天国内第一、5 月出海;任务式多 agent 调度(非一人一持续 bot)、积分制计费、知识层为本地文件+连接器(无公司共享真相源)——验证了 messaging-first 的量级,E/H 两列仍空。
 
 **关键观察:E(一人一 bot 对应真人、增强而非替代)和 H(公司级共享 vault)两列,矩阵里没有任何一家打勾。** 所有「AI 员工」产品在造新员工替代人头;所有框架不建组织数据层。单维度倒是多数已被市场验证是对的:A 被 OpenClaw 验证(甚至带火 Mac mini 销量,Bloomberg 2026-05 报道)、C 被飞书官方下场给 OpenClaw 写插件验证、D 被 Anthropic 自己弃向量改 grep 验证、F 被 Every 的 compound engineering 验证、G 被两家厂商把 agent 用量塞进订阅验证。
 
@@ -64,7 +66,7 @@ Anthropic 2025-05 从 Claude Code 移除向量检索改用 agentic search(Boris 
 ## 7. 理念背书与竞争时钟
 
 - 理念供给过剩(WAIC 2026「AI-Native Organizations」议题、Deloitte「The Great Rebuild」、Every 的 allocation economy / compound engineering),但「小团队今天想变 AI-native 该 git clone 什么」没有答案——理念与 infra 之间的缝就是本项目。
-- 时钟:Claude Cowork 2026-07 起向 web/移动/企业扩张;Dust 拿 Sequoia B 轮;钉钉/飞书国内加速;OpenClaw 社区随时可能把团队化用法产品化。窗口存在,但不会永远开着。
+- 时钟:WorkBuddy 90 天做到国内第一并出海(messaging-first 需求量级的最强实证,企业版 198 元/人/月);Claude Cowork 2026-07 起向 web/移动/企业扩张;Dust 拿 Sequoia B 轮;钉钉/飞书国内加速;OpenClaw 社区随时可能把团队化用法产品化。窗口存在,但不会永远开着。
 
 ---
 

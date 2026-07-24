@@ -289,6 +289,6 @@ anc doctor               # 环境诊断(keychain/PATH/GUI 会话/版本 pin)
 ## 12. 开放问题(onboarding 访谈与 M1 实作中回答)
 
 1. org 真相源的格式:纯 markdown(现状)vs `company.toml` 结构化清单——渲染管线需要机器可读,倾向「markdown 为主 + frontmatter 承载结构」。
-2. 多公司单机(一台 mini 跑两家公司)是否支持——v1 不支持,一机一公司。
+2. 多公司单机(一台 mini 跑多家公司)——已论证可行并改判为「共享托管」部署形态(M-后续):硬约束 = 每公司一个 macOS 用户(OS 级隔离,防 devbot 注入跨公司)+ 每公司自带订阅凭据(token 绝不跨公司共享,per-member 经 CLAUDE_CODE_OAUTH_TOKEN 按 project 注入);自动登录仅一用户,重启需逐用户登录一次(runbook 项)。v1 交付仍一机一公司。
 3. bot 间协作(群里互 @ 接力)——cc-connect 1.5 的 mention_map/inter-bot relay 落地后评估,v1 不做。
 4. 心跳/主动性(HEARTBEAT.md 模式)——多 bot 场景心跳成本 ×N,需全局错峰与预算闸,放 M4 评估。
