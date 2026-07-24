@@ -1,16 +1,27 @@
 # @ha7ch/ai-native-company
 
-> 把你的团队变成 AI native company:一台 Mac mini,一人一个 bot,公司知识全在 markdown 里。
+> 把你的团队变成 AI native company:公司知识全在 markdown 里,每个人都有自己的 AI。
 >
-> Turn your team into an AI-native company — one Mac mini, one bot per person, all company knowledge in markdown.
+> Turn your team into an AI-native company — all company knowledge in markdown, one AI per person.
 
-**状态:Spec 阶段。** 架构已在一支真实车队生产验证(markdown vault 13+ 周、6-bot 矩阵 8 周,见下),本库是把它抽象成可复制 infra 的立项仓库。详细设计见 [SPEC.md](./SPEC.md),实施计划见 [docs/PLAN.md](./docs/PLAN.md),调研依据见 [docs/RESEARCH.md](./docs/RESEARCH.md)。CLI bin 名为 `anc`(尚未发布)。
+**状态:轻形态 MVP 已可用,托管形态设计完成。** 架构已在一支真实车队生产验证(markdown vault 13+ 周、6-bot 矩阵 8 周,见下)。详细设计见 [SPEC.md](./SPEC.md)(托管形态)与 [docs/LIGHT-MVP.md](./docs/LIGHT-MVP.md)(轻形态),实施计划见 [docs/PLAN.md](./docs/PLAN.md),调研依据见 [docs/RESEARCH.md](./docs/RESEARCH.md)。CLI bin 名为 `anc`(尚未发布)。
 
 ---
 
 ## 是什么
 
-一个开源 infra:让任何小团队在**一台常开的 Mac mini** 上,快速部署出「公司里每个人都有一个自己的 AI bot」的运行时。
+一个开源 infra:公司的知识层(共享 vault + 角色 persona + skill 闭环)+ 按团队现状可选的运行层。按「团队里有没有人已经在用 Claude Code」分两种形态:
+
+| | 轻形态(`light/`,**MVP 已可用**) | 托管形态(SPEC 主线) |
+|---|---|---|
+| 假设 | 每人已有 Claude Code 等 agent 工作台 | 团队还没有 AI,从零拉起 |
+| 我们提供 | **云上唯一一份公司 vault**(Cloudflare Worker + R2)+ 一行接入 + 三个 skill,不部署任何 agent | 一台常开 Mac mini:一人一 bot 常驻公司 IM,vault + 网关 + 运维全托管 |
+| 接入 | `claude mcp add` 一行;onboarding 访谈建库(行业适配器) | `anc init` + 引导 checklist |
+| 覆盖 | 用 Claude Code 的人 | 全员(含不碰终端的同事,飞书/钉钉里 @ 即用) |
+
+两种形态共享同一套 vault 规范与 skill 体系;托管形态的 IM bot 就是轻形态 vault 的另一个客户端,先轻后重、随时升级。
+
+## 托管形态:每个人都有一个自己的 AI bot
 
 - **一人一 bot,增强而非替代。** bot 对应的是「人」,不是「角色」——两个车队经理就是两个 bot,各自有自己的会话、自己的 skill 迭代轨迹。角色只是 persona 的模板来源。市面上所有「AI 员工」产品都在造新员工替代人头;这里的 bot 是给每个真人配的放大器。
 - **bot 住在你们已有的 IM 里。** 飞书、钉钉、企业微信、Slack、Telegram……不用打开新的 dashboard,私聊或群里 @ 就是全部交互。
@@ -82,7 +93,8 @@ npx @ha7ch/ai-native-company onboard
 
 ## Roadmap(摘要)
 
-- **M0** 立项:调研 + SPEC(本仓库现状)
+- **轻形态 MVP** ✅:云上公司 vault(Worker + R2,MCP 五工具 + 版本历史)+ onboarding/join/ingest 三 skill,见 [`light/`](./light/)
+- **M0** 立项:调研 + SPEC ✅
 - **M1** 抽取:从 reference deployment 抽出 vault 模板、persona 渲染管线、launchd installer —— `anc init` 能在干净 Mac mini 上拉起「飞书 × Claude Code」的最小公司
 - **M2** 对话式 onboarding skill + 资料自动结构化入库 + `anc audit` 安全体检初版
 - **M3** 钉钉 / 企业微信 driver + Codex CLI 第二 harness

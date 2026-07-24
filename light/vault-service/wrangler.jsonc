@@ -1,0 +1,12 @@
+{
+  // anc-vault 轻形态 MVP。默认名带 -dev 后缀:裸 `wrangler deploy` 不会占用正式名。
+  // 部署到正式环境:改 name 或用 --name,见 README。
+  "name": "anc-vault-dev",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-01",
+  "observability": { "enabled": true },
+  "r2_buckets": [{ "binding": "VAULT", "bucket_name": "anc-vault" }]
+  // secret:VAULT_TOKEN(必配,未配置时服务拒绝一切请求)
+  //   npx wrangler secret put VAULT_TOKEN
+  // 本地开发:cp .dev.vars.example .dev.vars 并填一个随机串
+}

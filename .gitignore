@@ -7,3 +7,7 @@ dist/
 
 # 本地调研原文(含生产敏感细节,绝不入库)
 _research/
+
+# light/vault-service 本地态
+.dev.vars
+.wrangler/
