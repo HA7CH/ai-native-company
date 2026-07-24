@@ -1,0 +1,2 @@
+# 本地开发用:cp .dev.vars.example .dev.vars 并改成随机串(.dev.vars 已被 gitignore)
+VAULT_TOKEN=dev-secret-change-me
