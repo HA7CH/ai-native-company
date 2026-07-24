@@ -5,7 +5,6 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-07-01",
   "observability": { "enabled": true },
-  "rules": [{ "type": "Text", "globs": ["**/*.html"] }],
   "r2_buckets": [{ "binding": "VAULT", "bucket_name": "anc-vault" }]
   // secret:VAULT_TOKEN(必配,未配置时服务拒绝一切请求)
   //   npx wrangler secret put VAULT_TOKEN
