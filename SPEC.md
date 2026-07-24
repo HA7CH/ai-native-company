@@ -47,7 +47,7 @@ Bot     1 ── N Platform 绑定(一个 bot 可绑多平台账号)
 
 「bot 家目录」一个概念同时承担四件事,且在两个 harness 上语义完全一致:
 
-1. **persona 真相源挂载点**:cwd 里的 `CLAUDE.md`(Claude Code)/ `AGENTS.md`(Codex)自动加载。
+1. **persona 真相源挂载点**:cwd 里的 `CLAUDE.md`(Claude Code)/ `AGENTS.md`(Codex)自动加载。*注(M1 裁决):此语义用于直驱 harness 形态;经 gateway(cc-connect)部署时,persona 由渲染管线内联进 gateway 配置(生产验证形态,避免双注入),cwd 挂载路径 M3 与 Codex 后端一起落地——见 docs/M1-DESIGN.md 裁决 2。*
 2. **session scope**:两个 harness 的会话续接都按 cwd 隔离(`--resume` / `exec resume` 均是 cwd-scoped)。
 3. **沙箱边界**:角色 bot 的 cwd 是空沙箱目录,vault 数据以显式白名单授予只读视野;仓库的 `.env`、`scripts/`、`.git` 天然不在视野内。devbot 的 cwd 是仓库本体。注意:v1 默认 provider(cc-connect)对 claudecode 无任意 CLI flag 透传,`--add-dir` 仅在直驱 harness 时可用——cc-connect 路径下视野白名单靠「persona 里的绝对路径路由表 + harness 权限规则」实现(见 §3.1 上游缺口)。
 4. **附件落盘点**:IM 收到的图片/文件落进 `cwd/attachments/`,路径传给 harness。
