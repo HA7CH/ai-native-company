@@ -11,6 +11,14 @@ description: 创始人访谈式建库——给公司在云上建共享 vault(通
 - 建库前必须确认 vault MCP 已连接(见步骤 0);没连接就先引导用户连接,不要假装写入成功。
 - 不碰用户本地文件系统之外的东西;不在对话里回显 token。
 
+## 对话即界面:进度汇报约定(每轮必守)
+
+没有前端,对话就是全部界面。onboarding 的**每一轮回复**都必须让创始人一眼看清三件事:
+
+1. **回复第一行永远是进度行**,格式:`【onboarding 3/5 · 资料写入】已建 5 个文件,正在写 roles/ ——接下来还差成员名单`。五个阶段:① 连接 ② 访谈 ③ 目录设计确认 ④ 写入 ⑤ 收尾交付。
+2. 每轮结尾明确说**下一步需要用户给什么**(一句话,别让人猜)。
+3. **断点续走靠 vault 自己**:每完成一个阶段,立即 `vault_write("company/onboarding-state.md")` 记录阶段勾选清单与已收集的关键信息摘要(author=创始人,reason="onboarding 进度")。skill 每次启动第一件事(连接确认后)就是读这个文件:存在且未完成 → 播报「上次进行到第 n 步」并从中断处继续,已完成 → 转日常使用指引。中途关掉会话、换台电脑,都不丢进度。
+
 ## 前置:vault 服务已部署
 
 用户(或帮他的人)需要先部署一次 vault 服务(公司只做一次,5 分钟):见 `light/vault-service/README.md`。拿到两样东西:**服务地址** `https://<worker>/mcp` 和 **VAULT_TOKEN**。
@@ -25,7 +33,7 @@ description: 创始人访谈式建库——给公司在云上建共享 vault(通
 claude mcp add --transport http vault https://<worker>/mcp --header "Authorization: Bearer <token>"
 ```
 
-然后调用 `vault_list` 验证连通。全新公司会返回「vault 为空」——正常,继续。若已有内容,停下来问清楚是不是要在现有库上补建,避免覆盖。
+然后调用 `vault_list` 验证连通。全新公司会返回「vault 为空」——正常,继续。若已有内容:先 `vault_read("company/onboarding-state.md")`——有未完成的 onboarding 就播报进度并续走;没有该文件但库里有别的内容,停下来问清楚是不是要在现有库上补建,避免覆盖。
 
 ### 1. 访谈(行业适配器,语音友好)
 
