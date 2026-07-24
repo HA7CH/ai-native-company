@@ -18,7 +18,7 @@ export interface Env {
   VAULT_TOKEN?: string;
 }
 
-const PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26", "2024-11-05"];
+const PROTOCOL_VERSIONS = ["2025-06-18", "2025-03-26"];
 const SERVER_INFO = { name: "anc-vault", version: "0.1.0" };
 const HISTORY_PREFIX = "_history/";
 // "0" 紧跟 "/" 之后:startAfter 用它一步跳过整个 _history/ 字典序区间
@@ -70,7 +70,7 @@ const TOOLS = [
   {
     name: "vault_write",
     description:
-      "写入/覆盖 vault 中的一个文件。旧版本自动存档到 _history/,可回滚;他人同时改过会报冲突(重读合并后再写)。文本用 content;二进制(PDF 等原件)用 content_base64。写前先读 CONTRIBUTING.md 规范。触发词:入库、保存、更新文件。",
+      "写入/覆盖 vault 中的一个文件。每次覆盖都把被替换的旧版自动存档到 _history/(可查可回滚),并发同改时后提交者胜出、前者版本在历史里可恢复。文本用 content;二进制(PDF 等原件)用 content_base64。写前先读 CONTRIBUTING.md 规范。触发词:入库、保存、更新文件。",
     inputSchema: {
       type: "object",
       properties: {
@@ -240,6 +240,8 @@ async function toolWrite(
     throw new Error("content 与 content_base64 必须恰好提供一个");
   let body: ArrayBuffer | string;
   if (args.content_base64 != null) {
+    if (args.content_base64.length > Math.ceil((MAX_WRITE_BYTES * 4) / 3) + 4096)
+      throw new Error(`超过单文件上限 ${MAX_WRITE_BYTES} B`);
     const bin = Uint8Array.from(atob(args.content_base64.replace(/\s/g, "")), (c) => c.charCodeAt(0));
     if (bin.byteLength > MAX_WRITE_BYTES) throw new Error(`超过单文件上限 ${MAX_WRITE_BYTES} B`);
     body = bin.buffer as ArrayBuffer;
@@ -266,7 +268,13 @@ async function toolWrite(
   await env.VAULT.put(histKey, await prev.arrayBuffer(), {
     customMetadata: { ...meta, replacedAt: ts },
   });
-  const res = await env.VAULT.put(path, body, { customMetadata: meta, onlyIf: { etagMatches: prev.etag } });
+  let res;
+  try {
+    res = await env.VAULT.put(path, body, { customMetadata: meta, onlyIf: { etagMatches: prev.etag } });
+  } catch (e) {
+    await env.VAULT.delete(histKey).catch(() => {}); // 写失败不留伪历史
+    throw e;
+  }
   if (!res) {
     await env.VAULT.delete(histKey);
     throw new Error(conflictMsg);
@@ -388,6 +396,12 @@ export default {
         headers: { "content-type": "application/json" },
       });
 
+    const len = Number(req.headers.get("content-length") ?? 0);
+    if (len > MAX_WRITE_BYTES * 2)
+      return new Response(JSON.stringify(rpcError(null, -32600, "request too large")), {
+        status: 413,
+        headers: { "content-type": "application/json" },
+      });
     let parsed: unknown;
     try {
       parsed = await req.json();
@@ -397,10 +411,13 @@ export default {
         headers: { "content-type": "application/json" },
       });
     }
-    const messages: RpcMessage[] = Array.isArray(parsed) ? (parsed as RpcMessage[]) : [parsed as RpcMessage];
-    const responses = (await Promise.all(messages.map((m) => handleRpc(m, env)))).filter((r) => r !== null);
-    if (responses.length === 0) return new Response(null, { status: 202 }); // 纯 notification
-    const body = Array.isArray(parsed) ? responses : responses[0];
-    return new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
+    if (Array.isArray(parsed))
+      return new Response(JSON.stringify(rpcError(null, -32600, "batch not supported (MCP 2025-06-18: one message per POST)")), {
+        status: 400,
+        headers: { "content-type": "application/json" },
+      });
+    const response = await handleRpc(parsed as RpcMessage, env);
+    if (response === null) return new Response(null, { status: 202 }); // notification
+    return new Response(JSON.stringify(response), { status: 200, headers: { "content-type": "application/json" } });
   },
 };
