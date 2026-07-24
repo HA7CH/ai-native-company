@@ -57,4 +57,5 @@ curl -s $URL -H "Authorization: Bearer $TOKEN" -H 'content-type: application/jso
 - 单 token 一家公司,不分成员权限(per-member token / OAuth 是下一步)
 - 搜索是逐文件扫描(≤400 文件/15MB/次),量大再上索引;真相永远是 R2 里的文件
 - 二进制原件 ≤6MB;断网不可用(要离线,用托管形态的本地 vault)
+- **国内网络注意**:`*.workers.dev` 裸域在部分国内网络不可达,生产使用请在 Cloudflare 给 Worker 绑自定义域(dashboard → Workers → 域名与路由)
 - 写并发语义:后提交者胜出,**每一个被替换的版本都自动存档于 `_history/` 可恢复**(窄窗口竞争由 etag CAS 兜底报冲突);跨「读-改-写」全周期的严格互斥是下一步(etag 显式传递)
