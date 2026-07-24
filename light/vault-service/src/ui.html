@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>anc vault</title>
+<style>
+  :root {
+    --bg: #faf9f7; --fg: #1a1a1a; --muted: #8a8578; --line: #e6e2da;
+    --panel: #ffffff; --accent: #b4532a; --accent-soft: #f6e8e1;
+    --code-bg: #f1efe9; --ok: #3a7d44; --err: #b4532a;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #161513; --fg: #e8e5df; --muted: #8a8578; --line: #2c2a26;
+      --panel: #1e1d1a; --accent: #e0764a; --accent-soft: #33231c;
+      --code-bg: #262420; --ok: #7dba87;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 15px/1.65 -apple-system, "PingFang SC", "Noto Sans SC", system-ui, sans-serif;
+  }
+  header {
+    display: flex; align-items: center; gap: 14px; padding: 10px 20px;
+    border-bottom: 1px solid var(--line); position: sticky; top: 0; background: var(--bg); z-index: 5;
+  }
+  header .logo { font-weight: 700; letter-spacing: .02em; }
+  header .logo em { color: var(--accent); font-style: normal; }
+  header input[type=search] {
+    flex: 1; max-width: 420px; padding: 6px 12px; border: 1px solid var(--line);
+    border-radius: 8px; background: var(--panel); color: var(--fg); outline: none;
+  }
+  header input[type=search]:focus { border-color: var(--accent); }
+  .who { color: var(--muted); font-size: 13px; cursor: pointer; white-space: nowrap; }
+  .who b { color: var(--fg); }
+  main { display: grid; grid-template-columns: 300px 1fr; min-height: calc(100vh - 54px); }
+  @media (max-width: 760px) { main { grid-template-columns: 1fr; } #viewer { border-left: none; } }
+  nav { border-right: 1px solid var(--line); padding: 14px 10px; }
+  #crumbs { font-size: 13px; color: var(--muted); padding: 0 8px 8px; word-break: break-all; }
+  #crumbs a { color: var(--accent); text-decoration: none; cursor: pointer; }
+  .entry {
+    display: flex; justify-content: space-between; gap: 8px; padding: 5px 8px;
+    border-radius: 7px; cursor: pointer; font-size: 14px; word-break: break-all;
+  }
+  .entry:hover { background: var(--accent-soft); }
+  .entry.active { background: var(--accent-soft); }
+  .entry .size { color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .entry.dir { font-weight: 600; }
+  .entry.dir::before { content: "▸ "; color: var(--muted); }
+  #drop {
+    margin: 12px 8px 4px; padding: 16px 10px; text-align: center; font-size: 13px; color: var(--muted);
+    border: 1.5px dashed var(--line); border-radius: 10px; cursor: pointer; transition: .15s;
+  }
+  #drop.over, #drop:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+  #viewer { padding: 22px 30px 60px; max-width: 900px; }
+  #viewer h1.file { font-size: 17px; margin: 0 0 4px; word-break: break-all; }
+  .meta { color: var(--muted); font-size: 13px; margin-bottom: 14px; }
+  .meta button, .toolbar button {
+    border: 1px solid var(--line); background: var(--panel); color: var(--fg); border-radius: 7px;
+    padding: 3px 12px; font-size: 13px; cursor: pointer; margin-right: 6px;
+  }
+  .meta button:hover, .toolbar button:hover { border-color: var(--accent); color: var(--accent); }
+  .md { line-height: 1.75; }
+  .md h1 { font-size: 24px; border-bottom: 1px solid var(--line); padding-bottom: .3em; }
+  .md h2 { font-size: 19px; margin-top: 1.6em; }
+  .md h3 { font-size: 16px; }
+  .md code { background: var(--code-bg); padding: .15em .4em; border-radius: 5px; font-size: .9em; }
+  .md pre { background: var(--code-bg); padding: 14px; border-radius: 10px; overflow-x: auto; }
+  .md pre code { background: none; padding: 0; }
+  .md table { border-collapse: collapse; margin: 1em 0; display: block; overflow-x: auto; }
+  .md th, .md td { border: 1px solid var(--line); padding: 5px 12px; }
+  .md th { background: var(--code-bg); }
+  .md blockquote { border-left: 3px solid var(--accent); margin: 1em 0; padding: .2em 1em; color: var(--muted); }
+  .md a { color: var(--accent); }
+  .md img { max-width: 100%; }
+  textarea#editor {
+    width: 100%; min-height: 60vh; padding: 14px; border: 1px solid var(--line); border-radius: 10px;
+    background: var(--panel); color: var(--fg); font: 13.5px/1.6 ui-monospace, SFMono-Regular, Menlo, monospace;
+    outline: none; resize: vertical;
+  }
+  img.preview { max-width: 100%; border: 1px solid var(--line); border-radius: 10px; background: #fff; }
+  #toast {
+    position: fixed; bottom: 22px; left: 50%; transform: translateX(-50%);
+    background: var(--fg); color: var(--bg); padding: 8px 18px; border-radius: 9px;
+    font-size: 13.5px; opacity: 0; transition: .25s; pointer-events: none; max-width: 80vw;
+  }
+  #toast.show { opacity: .95; }
+  dialog {
+    border: 1px solid var(--line); border-radius: 14px; background: var(--panel); color: var(--fg);
+    padding: 26px; width: min(420px, 92vw);
+  }
+  dialog::backdrop { background: rgba(0,0,0,.35); }
+  dialog h2 { margin-top: 0; }
+  dialog input {
+    width: 100%; padding: 8px 12px; margin: 6px 0 14px; border: 1px solid var(--line);
+    border-radius: 8px; background: var(--bg); color: var(--fg); outline: none;
+  }
+  dialog button {
+    background: var(--accent); color: #fff; border: none; border-radius: 8px;
+    padding: 8px 22px; font-size: 14px; cursor: pointer;
+  }
+  .hint { color: var(--muted); font-size: 12.5px; }
+  ul.hits { list-style: none; padding: 0; }
+  ul.hits li { padding: 6px 10px; border-radius: 7px; cursor: pointer; }
+  ul.hits li:hover { background: var(--accent-soft); }
+  ul.hits li .k { color: var(--accent); font-size: 13px; }
+  ul.hits li .t { color: var(--muted); font-size: 13px; display: block; }
+</style>
+</head>
+<body>
+<header>
+  <span class="logo"><em>anc</em> vault</span>
+  <input type="search" id="q" placeholder="搜索全库…(回车)">
+  <span class="who" id="who" title="点击修改名字/token"></span>
+</header>
+<main>
+  <nav>
+    <div id="crumbs"></div>
+    <div id="list"></div>
+    <div id="drop">把文件拖到这里上传到当前目录<br><span class="hint">logo / PDF / markdown 都可以,≤6MB</span></div>
+    <input type="file" id="picker" multiple hidden>
+  </nav>
+  <section id="viewer">
+    <div class="md" id="welcome">
+      <h1>公司共享 vault</h1>
+      <p>左边浏览目录,点文件查看;把品牌 logo、PDF、任何资料拖进左下角就入库,全员(和所有人的 Claude Code)立即可见。</p>
+      <p class="hint">命令行接入:<code>claude mcp add --transport http vault 本站地址/mcp --header "Authorization: Bearer &lt;token&gt;"</code></p>
+    </div>
+    <div id="content"></div>
+  </section>
+</main>
+<div id="toast"></div>
+<dialog id="setup">
+  <h2>接入 vault</h2>
+  <label>访问 token(管理员发给你的)</label>
+  <input id="tok" type="password" autocomplete="off">
+  <label>你的名字(写入时记入历史)</label>
+  <input id="name" placeholder="如:lawted">
+  <button id="go">连接</button>
+  <p class="hint">token 只存在本浏览器 localStorage,不会发给除本服务外的任何地方。</p>
+</dialog>
+<script>
+"use strict";
+const $ = (s) => document.querySelector(s);
+const store = {
+  get token() { return localStorage.getItem("anc_token") || ""; },
+  set token(v) { localStorage.setItem("anc_token", v); },
+  get author() { return localStorage.getItem("anc_author") || ""; },
+  set author(v) { localStorage.setItem("anc_author", v); },
+};
+let cwd = ""; // 当前目录前缀,"" = 根
+let rpcId = 0;
+
+function toast(msg, ms = 2600) {
+  const t = $("#toast"); t.textContent = msg; t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), ms);
+}
+async function callTool(name, args) {
+  const res = await fetch("/mcp", {
+    method: "POST",
+    headers: { "content-type": "application/json", authorization: "Bearer " + store.token },
+    body: JSON.stringify({ jsonrpc: "2.0", id: ++rpcId, method: "tools/call", params: { name, arguments: args } }),
+  });
+  if (res.status === 401) { $("#setup").showModal(); throw new Error("token 无效"); }
+  const j = await res.json();
+  if (j.error) throw new Error(j.error.message);
+  const r = j.result;
+  const text = (r.content && r.content[0] && r.content[0].text) || "";
+  if (r.isError) throw new Error(text.replace(/^错误:/, ""));
+  return text;
+}
+
+// ---------- 极简 markdown 渲染(够用即可,不追求完整规范) ----------
+function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+function inline(s) {
+  return s
+    .replace(/`([^`]+)`/g, (_, c) => "<code>" + c + "</code>")
+    .replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>")
+    .replace(/\[([^\]]+)\]\((https?:[^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+}
+function renderMd(src) {
+  const lines = src.split("\n");
+  const out = [];
+  let i = 0;
+  while (i < lines.length) {
+    const l = lines[i];
+    if (l.startsWith("```")) {
+      const buf = [];
+      i++;
+      while (i < lines.length && !lines[i].startsWith("```")) buf.push(lines[i++]);
+      i++;
+      out.push("<pre><code>" + esc(buf.join("\n")) + "</code></pre>");
+      continue;
+    }
+    if (/^\s*\|.*\|\s*$/.test(l)) {
+      const rows = [];
+      while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) rows.push(lines[i++]);
+      const cells = (r) => r.trim().replace(/^\||\|$/g, "").split("|").map((c) => inline(esc(c.trim())));
+      let html = "<table>";
+      rows.forEach((r, ri) => {
+        if (/^\s*\|[\s\-:|]+\|\s*$/.test(r)) return; // 分隔行
+        const tag = ri === 0 ? "th" : "td";
+        html += "<tr>" + cells(r).map((c) => "<" + tag + ">" + c + "</" + tag + ">").join("") + "</tr>";
+      });
+      out.push(html + "</table>");
+      continue;
+    }
+    const h = l.match(/^(#{1,4})\s+(.*)/);
+    if (h) { out.push("<h" + h[1].length + ">" + inline(esc(h[2])) + "</h" + h[1].length + ">"); i++; continue; }
+    if (/^\s*[-*]\s+/.test(l)) {
+      const buf = [];
+      while (i < lines.length && /^\s*[-*]\s+/.test(lines[i])) buf.push(lines[i++].replace(/^\s*[-*]\s+/, ""));
+      out.push("<ul>" + buf.map((x) => "<li>" + inline(esc(x)) + "</li>").join("") + "</ul>");
+      continue;
+    }
+    if (/^\s*\d+\.\s+/.test(l)) {
+      const buf = [];
+      while (i < lines.length && /^\s*\d+\.\s+/.test(lines[i])) buf.push(lines[i++].replace(/^\s*\d+\.\s+/, ""));
+      out.push("<ol>" + buf.map((x) => "<li>" + inline(esc(x)) + "</li>").join("") + "</ol>");
+      continue;
+    }
+    if (/^>\s?/.test(l)) { out.push("<blockquote>" + inline(esc(l.replace(/^>\s?/, ""))) + "</blockquote>"); i++; continue; }
+    if (/^---+\s*$/.test(l)) { out.push("<hr>"); i++; continue; }
+    if (l.trim() === "") { i++; continue; }
+    out.push("<p>" + inline(esc(l)) + "</p>");
+    i++;
+  }
+  return out.join("\n");
+}
+
+// ---------- 浏览 ----------
+const IMG_EXT = /\.(png|jpe?g|gif|svg|webp|ico)$/i;
+const TEXT_EXT = /\.(md|markdown|json|jsonl|txt|yaml|yml|csv|toml|xml|html)$/i;
+
+function crumbs() {
+  const parts = cwd ? cwd.replace(/\/$/, "").split("/") : [];
+  let html = '<a data-p="">根目录</a>';
+  let acc = "";
+  for (const p of parts) { acc += p + "/"; html += " / " + '<a data-p="' + acc + '">' + esc(p) + "</a>"; }
+  $("#crumbs").innerHTML = html;
+  $("#crumbs").querySelectorAll("a").forEach((a) => (a.onclick = () => listDir(a.dataset.p)));
+}
+async function listDir(prefix) {
+  cwd = prefix;
+  crumbs();
+  const el = $("#list");
+  el.innerHTML = '<div class="hint" style="padding:6px 8px">加载中…</div>';
+  try {
+    const text = await callTool("vault_list", prefix ? { path: prefix } : {});
+    const rows = [];
+    for (const line of text.split("\n")) {
+      if (line.endsWith("<目录>")) {
+        const p = line.replace(/\s*<目录>$/, "").trim();
+        rows.push('<div class="entry dir" data-d="' + p + '">' + esc(p.slice(prefix.length).replace(/\/$/, "")) + "</div>");
+      } else {
+        const m = line.match(/^(.*?)\s{2}\((\d+) B\)$/);
+        if (m) rows.push('<div class="entry" data-f="' + m[1] + '"><span>' + esc(m[1].slice(prefix.length)) + '</span><span class="size">' + fmtSize(+m[2]) + "</span></div>");
+      }
+    }
+    el.innerHTML = rows.join("") || '<div class="hint" style="padding:6px 8px">空目录。拖文件进来,或跑 anc-onboard 建库。</div>';
+    el.querySelectorAll(".entry.dir").forEach((d) => (d.onclick = () => listDir(d.dataset.d)));
+    el.querySelectorAll(".entry[data-f]").forEach((f) => (f.onclick = () => openFile(f.dataset.f)));
+  } catch (e) { el.innerHTML = '<div class="hint" style="padding:6px 8px">' + esc(e.message) + "</div>"; }
+}
+function fmtSize(n) { return n > 1048576 ? (n / 1048576).toFixed(1) + " MB" : n > 1024 ? (n / 1024).toFixed(1) + " KB" : n + " B"; }
+
+async function openFile(key) {
+  $("#welcome").style.display = "none";
+  const c = $("#content");
+  document.querySelectorAll(".entry").forEach((x) => x.classList.toggle("active", x.dataset.f === key));
+  c.innerHTML = '<h1 class="file">' + esc(key) + '</h1><div class="meta">加载中…</div>';
+  const head = '<h1 class="file">' + esc(key) + "</h1>";
+  const bar = (extra) =>
+    '<div class="meta">' + (extra || "") +
+    '<button id="bHist">历史</button>' +
+    (TEXT_EXT.test(key) || !/\.[a-z0-9]+$/i.test(key) ? '<button id="bEdit">编辑</button>' : "") +
+    '<button id="bDown">下载</button></div>';
+  try {
+    if (IMG_EXT.test(key)) {
+      const blob = await fetchRaw(key);
+      c.innerHTML = head + bar() + '<img class="preview" src="' + URL.createObjectURL(blob) + '">';
+    } else {
+      const text = await callTool("vault_read", { path: key });
+      if (text.startsWith("[二进制文件]")) c.innerHTML = head + bar() + '<p class="hint">' + esc(text) + "</p>";
+      else if (/\.md$/i.test(key) || !/\.[a-z0-9]+$/i.test(key))
+        c.innerHTML = head + bar() + '<div class="md">' + renderMd(text) + "</div>";
+      else c.innerHTML = head + bar() + "<pre>" + esc(text) + "</pre>";
+      c.dataset.text = text;
+    }
+    $("#bHist").onclick = () => showHistory(key);
+    $("#bDown").onclick = () => download(key);
+    const be = $("#bEdit");
+    if (be) be.onclick = () => editFile(key, c.dataset.text || "");
+  } catch (e) { c.innerHTML = head + '<p class="hint">' + esc(e.message) + "</p>"; }
+}
+async function fetchRaw(key) {
+  const res = await fetch("/raw/" + encodeURI(key), { headers: { authorization: "Bearer " + store.token } });
+  if (!res.ok) throw new Error("读取失败 HTTP " + res.status);
+  return await res.blob();
+}
+async function download(key) {
+  const blob = await fetchRaw(key);
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = key.split("/").pop();
+  a.click();
+}
+
+// ---------- 编辑 / 历史 ----------
+function editFile(key, text) {
+  const c = $("#content");
+  c.innerHTML =
+    '<h1 class="file">' + esc(key) + '</h1><div class="toolbar meta"><button id="bSave">保存</button><button id="bCancel">取消</button></div>' +
+    '<textarea id="editor"></textarea>';
+  $("#editor").value = text;
+  $("#bCancel").onclick = () => openFile(key);
+  $("#bSave").onclick = async () => {
+    const reason = prompt("一句话:为什么改?") || "";
+    try {
+      await callTool("vault_write", { path: key, content: $("#editor").value, author: store.author, reason });
+      toast("已保存,全员立即可见");
+      openFile(key);
+    } catch (e) { toast("保存失败:" + e.message, 5000); }
+  };
+}
+async function showHistory(key) {
+  const c = $("#content");
+  try {
+    const text = await callTool("vault_history", { path: key });
+    const lines = text.split("\n");
+    let html = '<h1 class="file">' + esc(key) + ' · 历史</h1><div class="meta"><button id="bBack">← 返回</button></div><ul class="hits">';
+    for (const l of lines.slice(1)) {
+      const m = l.match(/^(\S+)\s{2}(\d+) B\s{2}(.*)$/);
+      if (m) html += '<li data-h="' + m[1] + '"><span class="k">' + esc(m[1].split("/").pop()) + "</span><span class=\"t\">" + esc(m[3]) + " · " + fmtSize(+m[2]) + "</span></li>";
+    }
+    c.innerHTML = html + "</ul><p class='hint'>" + esc(lines[0]) + "</p>";
+    $("#bBack").onclick = () => openFile(key);
+    c.querySelectorAll("li[data-h]").forEach((li) => (li.onclick = async () => {
+      const v = await callTool("vault_read", { path: li.dataset.h });
+      c.innerHTML = '<h1 class="file">' + esc(li.dataset.h) + '</h1><div class="meta"><button id="bBack2">← 历史</button><button id="bRoll">回滚到此版</button></div><pre>' + esc(v) + "</pre>";
+      $("#bBack2").onclick = () => showHistory(key);
+      $("#bRoll").onclick = async () => {
+        if (!confirm("确认把这一版写回 " + key + "?")) return;
+        await callTool("vault_write", { path: key, content: v, author: store.author, reason: "回滚到 " + li.dataset.h.split("/").pop() });
+        toast("已回滚");
+        openFile(key);
+      };
+    }));
+  } catch (e) { toast(e.message, 4000); }
+}
+
+// ---------- 上传 ----------
+async function uploadFiles(files) {
+  for (const f of files) {
+    if (f.size > 6 * 1024 * 1024) { toast(f.name + " 超过 6MB,跳过", 4000); continue; }
+    const path = cwd + f.name;
+    try {
+      if (TEXT_EXT.test(f.name)) {
+        await callTool("vault_write", { path, content: await f.text(), author: store.author, reason: "网页上传" });
+      } else {
+        const buf = new Uint8Array(await f.arrayBuffer());
+        let bin = "";
+        for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, buf.subarray(i, i + 0x8000));
+        await callTool("vault_write", { path, content_base64: btoa(bin), author: store.author, reason: "网页上传" });
+      }
+      toast("已入库 " + path);
+    } catch (e) { toast(f.name + " 失败:" + e.message, 5000); }
+  }
+  listDir(cwd);
+}
+const drop = $("#drop");
+drop.onclick = () => $("#picker").click();
+$("#picker").onchange = (e) => uploadFiles([...e.target.files]);
+["dragover", "dragenter"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add("over"); }));
+["dragleave", "drop"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.remove("over"); }));
+drop.addEventListener("drop", (e) => uploadFiles([...e.dataTransfer.files]));
+
+// ---------- 搜索 ----------
+$("#q").addEventListener("keydown", async (e) => {
+  if (e.key !== "Enter" || !e.target.value.trim()) return;
+  $("#welcome").style.display = "none";
+  const c = $("#content");
+  c.innerHTML = '<h1 class="file">搜索:' + esc(e.target.value) + '</h1><div class="meta">搜索中…</div>';
+  try {
+    const text = await callTool("vault_search", { query: e.target.value.trim() });
+    const lines = text.split("\n");
+    let html = '<h1 class="file">搜索:' + esc(e.target.value) + '</h1><p class="hint">' + esc(lines[0]) + '</p><ul class="hits">';
+    for (const l of lines.slice(1)) {
+      const m = l.match(/^(.*?):(\d+): (.*)$/);
+      if (m) html += '<li data-f="' + m[1] + '"><span class="k">' + esc(m[1]) + ":" + m[2] + '</span><span class="t">' + esc(m[3]) + "</span></li>";
+    }
+    c.innerHTML = html + "</ul>";
+    c.querySelectorAll("li[data-f]").forEach((li) => (li.onclick = () => openFile(li.dataset.f)));
+  } catch (err) { c.innerHTML += '<p class="hint">' + esc(err.message) + "</p>"; }
+});
+
+// ---------- 启动 ----------
+function refreshWho() {
+  $("#who").innerHTML = store.author ? "<b>" + esc(store.author) + "</b> · 换人/token" : "设置 token";
+}
+$("#who").onclick = () => { $("#tok").value = store.token; $("#name").value = store.author; $("#setup").showModal(); };
+$("#go").onclick = async () => {
+  store.token = $("#tok").value.trim();
+  store.author = $("#name").value.trim() || "anonymous";
+  try {
+    await callTool("vault_list", {});
+    $("#setup").close();
+    refreshWho();
+    listDir("");
+    toast("连接成功");
+  } catch (e) { toast("连接失败:" + e.message, 4000); }
+};
+refreshWho();
+if (store.token) listDir("");
+else $("#setup").showModal();
+</script>
+</body>
+</html>

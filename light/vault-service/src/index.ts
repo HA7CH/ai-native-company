@@ -13,6 +13,8 @@
  * - 鉴权:Bearer token(VAULT_TOKEN secret);未配置该 secret 时拒绝一切请求(默认值即安全)
  */
 
+import UI_HTML from "./ui.html";
+
 export interface Env {
   VAULT: R2Bucket;
   VAULT_TOKEN?: string;
@@ -374,11 +376,43 @@ function authorized(req: Request, env: Env): boolean {
   return diff === 0;
 }
 
+const RAW_TYPES: Record<string, string> = {
+  png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif",
+  svg: "image/svg+xml", webp: "image/webp", ico: "image/x-icon",
+  pdf: "application/pdf", md: "text/markdown; charset=utf-8", txt: "text/plain; charset=utf-8",
+  json: "application/json", html: "text/plain; charset=utf-8", // html 一律按纯文本出,防存储型 XSS
+};
+
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
     const url = new URL(req.url);
     if (url.pathname === "/" && req.method === "GET")
-      return new Response(`anc-vault ${SERVER_INFO.version} — MCP endpoint at POST /mcp\n`, { status: 200 });
+      return new Response(UI_HTML, {
+        status: 200,
+        headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store" },
+      });
+    // GET /raw/<key>:网页端预览/下载二进制(logo/PDF)用;同 Bearer 鉴权
+    if (url.pathname.startsWith("/raw/") && req.method === "GET") {
+      if (!authorized(req, env)) return new Response("unauthorized", { status: 401 });
+      let key: string;
+      try {
+        key = normalizePath(decodeURIComponent(url.pathname.slice("/raw/".length)));
+      } catch (e: any) {
+        return new Response(`bad path: ${e?.message ?? e}`, { status: 400 });
+      }
+      const obj = await env.VAULT.get(key);
+      if (!obj) return new Response("not found", { status: 404 });
+      const ext = (key.split(".").pop() ?? "").toLowerCase();
+      return new Response(obj.body, {
+        status: 200,
+        headers: {
+          "content-type": RAW_TYPES[ext] ?? "application/octet-stream",
+          "x-content-type-options": "nosniff",
+          "cache-control": "no-store",
+          "content-disposition": `inline; filename*=UTF-8''${encodeURIComponent(key.split("/").pop() ?? "file")}`,
+        },
+      });
+    }
     if (url.pathname !== "/mcp") return new Response("not found", { status: 404 });
     if (req.method === "GET") return new Response("stateless server: no event stream", { status: 405 });
     if (req.method !== "POST") return new Response("method not allowed", { status: 405 });

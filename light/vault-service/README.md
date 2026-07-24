@@ -24,6 +24,10 @@ npx wrangler deploy --name anc-vault-<公司名>
 
 > 费用:Workers Paid $5/月起;R2 10GB 免费额度内 markdown 规模基本为零。
 
+## 网页控制台
+
+部署地址的根路径就是网页控制台:浏览器打开 `https://<worker地址>/`,粘贴 token(存本浏览器 localStorage)即可浏览目录、预览 markdown 与图片、拖拽上传(logo/PDF 直接入库)、搜索、看历史版本与一键回滚——和 CLI 吃同一个后端,给不用终端的同事用。
+
 ## 每个成员接入(一行)
 
 ```bash
