@@ -12,7 +12,7 @@
 
 ## M1 — 抽取:`anc init` 拉起最小公司(飞书 × Claude Code)
 
-目标:在一台干净 Mac mini 上,`anc init` + 引导 checklist 走完,得到一个能回话的 N-bot 公司。
+目标:在一台干净 Mac mini 上,`anc init` + 引导 checklist 走完,得到一个能回话的 N-bot 公司。详细技术设计见 [M1-DESIGN.md](./M1-DESIGN.md)。
 
 - [ ] 从 reference deployment 抽出 generic 部分,形成 **vault 模板仓库**(目录骨架、CONTRIBUTING、路由 CLAUDE.md/AGENTS.md 双文件、templates/)
 - [ ] **org 真相源 schema**(members/ + roles/,markdown + frontmatter)与 **config 渲染器**(org → cc-connect config.toml,原子写 + 三重校验 + dry-run)

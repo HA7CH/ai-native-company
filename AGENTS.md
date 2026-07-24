@@ -36,9 +36,5 @@
 ## 铁律:泄密防线
 
 - `_research/` 与任何含生产细节的内容**绝不 commit**(.gitignore 已排除,别绕过)。
-- 转公开检查(repo 转 public 前必跑):
-  ```bash
-  git ls-files _research/   # 必须为空
-  git grep -rniE 'climaxmac|tailscale|tail7d673e|100\.(106|83)\.|climaxracing|ou_[a-z0-9]|oc_[a-z0-9]|cli_[a-z0-9]|app_secret' -- '*.md' '*.json' '*.ts'   # 必须零命中
-  ```
+- 转公开检查(repo 转 public 前必跑):`bash scripts/check-public.sh`,零输出且退出码 0 = 通过。规则维护在脚本里(脚本自身不在扫描范围,无自命中;文档示例占位符用 ou_*** / cli_***)。脚本是绊线不是证明,转公开前仍需人工过一遍全量 diff。
 - 涉及 reference deployment 的表述只写通用化 lessons learned,不写可定位到具体在跑机器的攻击面线索(措辞用设计约束时态,如「一律不授予」,不用「已整改/待整改」)。
