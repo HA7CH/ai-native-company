@@ -21,5 +21,21 @@
     "company",
     "bot"
   ],
+  "bin": {
+    "anc": "dist/src/cli.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "tsc -p tsconfig.json && node --test dist/test/*.test.js"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^22.7.0",
+    "typescript": "^5.5.4"
+  },
   "private": true
 }

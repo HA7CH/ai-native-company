@@ -1,0 +1,4 @@
+# 示例:未建模全局段的显式逃生门(裁决 12)
+[speech]
+provider = "openai"
+api_key = "${ANC_SPEECH_KEY}"
