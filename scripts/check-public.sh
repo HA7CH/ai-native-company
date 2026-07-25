@@ -19,8 +19,10 @@ if [ -n "$hits" ]; then
 fi
 
 # 3) secret 明文赋值(= 或 :,可带引号;${ENV} 引用形态与裸字段名引用放行)
+#    排除项允许被引号包裹(如 api_key = "***占位"):与规则 2 的占位符哲学一致——
+#    真凭据不会以 *** / null / TBC 开头,放行占位符不削弱防线。
 hits=$(git grep -rnIiE "(app_secret|api_key|_token|password)[[:space:]]*[:=][[:space:]]*[\"'\`]?[^\$\"'\`[:space:]]" -- '*.md' '*.json' '*.ts' \
-  | grep -viE "(_token|api_key|password)[[:space:]]*[:=][[:space:]]*(null|true|false|\{|\[|<|TBC|\.\.\.|\*\*\*)" || true)
+  | grep -viE "(app_secret|_token|api_key|password)[[:space:]]*[:=][[:space:]]*[\"'\`]?(null|true|false|\{|\[|<|TBC|\.\.\.|\*\*\*)" || true)
 if [ -n "$hits" ]; then
   echo "$hits"
   fail=1

@@ -119,7 +119,9 @@ test("validate:指纹头缺失必被拦", () => {
 
 test("validate:extra 段 secret 明文必被拦,非 ANC_ 变量给 WARN", () => {
   const org = makeOrg();
-  const plaintext = rules(org, { gatewayExtra: '[speech]\napi_key = "sk-明文写死了"\n' });
+  // 值用 *** 占位符形态:校验器只看「是不是 ${ENV} 引用」,与值本身无关;
+  // 同时避开 check-public.sh 规则 3 对明文 secret 的绊线(占位符约定见 CLAUDE.md)。
+  const plaintext = rules(org, { gatewayExtra: '[speech]\napi_key = "***明文占位"\n' });
   assert.ok(plaintext.includes("SEM-EXTRA-SECRET"), "extra 段无例外:secret 只许 ${ENV} 引用");
 
   const envRef = rules(org, { gatewayExtra: '[speech]\napi_key = "${ANC_SPEECH_KEY}"\n' });
