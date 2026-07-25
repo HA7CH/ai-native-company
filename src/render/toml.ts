@@ -105,6 +105,54 @@ export function projectName(companyId: string, memberName: string): string {
   return `${companyId}-${memberName}`;
 }
 
+/**
+ * project 级禁用命令(上游 `disabled_commands`,M1-DESIGN §9 裁决 13 的运行时闭环)。
+ *
+ * - `mode`:角色 bot 必禁 —— /mode 非特权命令且不校验管理员,任何白名单用户可提权到
+ *   bypassPermissions(SPEC §7 红线)。devbot 本就是最高权限档,禁之无意义,予以豁免。
+ * - `provider` / `model`:全员禁 —— 二者会回写 config.toml 制造指纹漂移,与「全量生成、
+ *   config 归 anc 独占」的契约冲突;切模型/切 provider 走 org 真相源 + 重新 deploy。
+ */
+export function disabledCommands(isDevbot: boolean): string[] {
+  return isDevbot ? ["provider", "model"] : ["mode", "provider", "model"];
+}
+
+/**
+ * org 的 BCP-47 language → 上游认得的取值。
+ *
+ * 上游 switch(main.go:331-345)只认下列字面量,其余一律落 `LangAuto`;而**仅当** LangAuto 时
+ * 才注册语言回写钩子(main.go:801-805),第一条中文消息就会触发 SaveLanguage 把我们全量生成的
+ * config.toml 就地 patch(顺带经 formatTOML 删空段、插空行)—— 指纹立即失配,`anc deploy config`
+ * 会把上游的自动回写误判成人为手改事故。
+ *
+ * 所以 org 侧可写 BCP-47(zh-CN),但渲染必须映射成上游字面量;不可映射的取值拒渲,绝不原样透传。
+ */
+const GATEWAY_LANGUAGES: Record<string, string> = {
+  zh: "zh",
+  "zh-cn": "zh",
+  "zh-hans": "zh",
+  "zh-tw": "zh-TW",
+  "zh-hant": "zh-TW",
+  en: "en",
+  "en-us": "en",
+  "en-gb": "en",
+  ja: "ja",
+  "ja-jp": "ja",
+  es: "es",
+  "es-es": "es",
+};
+
+export function gatewayLanguage(language: string): string {
+  const mapped = GATEWAY_LANGUAGES[language.trim().toLowerCase()];
+  if (mapped === undefined) {
+    throw new Error(
+      `renderConfig: language \`${language}\` 无法映射到 cc-connect 认得的取值 —— ` +
+        `原样透传会落进 auto 档并触发上游回写 config(指纹漂移)。支持:${Object.keys(GATEWAY_LANGUAGES).join(", ")}`,
+    );
+  }
+  return mapped;
+}
+
 /** 启用成员按渲染顺序(目录名排序 + devbot 殿后)。 */
 export function enabledMembersInOrder(org: Org): Member[] {
   return orderMembers(org.members.filter((m) => !m.disabled));
@@ -192,10 +240,13 @@ export function renderConfig(input: RenderConfigInput): RenderedConfig {
   L.push(`# anc:generated v=${input.ancVersion} inputs=${inputsHash} at=${input.now}`);
   L.push("# 本文件由 anc 全量生成;手改视为事故 —— 修改请编辑 org 真相源后运行 anc deploy config(SPEC §4.2)。");
   L.push("");
-  L.push(`language = ${basicString(org.company.language)}`);
+  L.push(`language = ${basicString(gatewayLanguage(org.company.language))}`);
   L.push(`data_dir = ${basicString(dataDir)}`);
   L.push("");
   L.push("[log]");
+  // 写全 level 而非留空段:上游 formatTOML 会删除「表头后只跟空行」的空段(config.go:1548-1613),
+  // 一旦发生任何回写就会把空 [log] 抹掉 → 与渲染产物失配。[log] 合法键只有 level(config.go:603)。
+  L.push(`level = ${basicString("info")}`);
   L.push("");
   L.push("[display]");
   L.push(`mode = ${basicString("full")}`);
@@ -216,10 +267,20 @@ export function renderConfig(input: RenderConfigInput): RenderedConfig {
     // admin_from 必须写 project 顶层(写进 platforms.options 会被上游静默忽略 —— 渲染器硬编码位置)
     L.push(`admin_from = ${basicString(adminOpenIds.join(","))}`);
     L.push("reset_on_idle_mins = 30");
+    // 运行时红线:/mode 不在上游 privilegedCommands 表(engine.go:1004),cmdMode 也不校验管理员,
+    // 任何 allow_from 内的用户发 `/mode bypassPermissions` 即可提权角色 bot —— 渲染 config 挡不住,
+    // 只能靠 disabled_commands(config.go:506,main.go:466 已 wired)。SPEC §7 红线的运行时闭环。
+    // /provider 与 /model 会 patchProjectAgentOption 回写 config.toml(config.go:1164/2593),
+    // 破坏「config.toml 归 anc 独占、手改视为事故」的契约 —— 全员禁,devbot 亦然。
+    L.push(`disabled_commands = ${stringArray(disabledCommands(isDevbot))}`);
 
     if (org.company.defaults.auto_compress_max_tokens !== undefined) {
       L.push("");
       L.push("[projects.auto_compress]");
+      // enabled 必须显式写 true:上游 `Enabled *bool` 默认 nil(config.go:442 注释 "default false"),
+      // main.go:619 `if Enabled != nil && *Enabled` 直接短路 —— 只写 max_tokens 是语法合法、
+      // 语义完全失效的死配置。min_gap_mins 不渲染,用上游默认 30 分钟。
+      L.push("enabled = true");
       L.push(`max_tokens = ${org.company.defaults.auto_compress_max_tokens}`);
     }
 
@@ -257,9 +318,13 @@ export function renderConfig(input: RenderConfigInput): RenderedConfig {
     for (const id of [member.feishu.open_id, ...member.feishu.extra_allow_from, ...adminOpenIds]) {
       if (!allowFrom.includes(id)) allowFrom.push(id); // Set 语义去重(抄 access.sh)
     }
-    L.push(`allow_from = ${stringArray(allowFrom)}`);
+    // 必须是逗号串,不能是 TOML 数组 —— 上游 14 个 platform 一律 `opts["allow_from"].(string)`
+    // (v1.3.4 platform/feishu/feishu.go:222),数组解出 []any 断言失败得空串,而
+    // core.AllowList 对空串 `return true` = 放行任意用户(core/message.go)。数组形态即 fail-open。
+    // 对照:allowed_tools 才是数组(claudecode.go:152 `.([]any)`),两者不可混用。
+    L.push(`allow_from = ${basicString(allowFrom.join(","))}`);
     if (member.feishu.allow_chat.length > 0) {
-      L.push(`allow_chat = ${stringArray(member.feishu.allow_chat)}`);
+      L.push(`allow_chat = ${basicString(member.feishu.allow_chat.join(","))}`);
     }
   }
 
@@ -278,7 +343,7 @@ export function renderConfig(input: RenderConfigInput): RenderedConfig {
 // mini round-trip 解析器(只认自家产出形态)
 // ---------------------------------------------------------------------------
 
-export type TomlPrim = string | number | string[];
+export type TomlPrim = string | number | boolean | string[];
 
 export interface ParsedPlatform {
   top: Record<string, TomlPrim>;
@@ -558,6 +623,8 @@ export function parseAncToml(text: string): ParsedConfig {
       if (v !== undefined) target[key] = v;
     } else if (/^-?\d+$/.test(rawValue)) {
       target[key] = parseInt(rawValue, 10);
+    } else if (rawValue === "true" || rawValue === "false") {
+      target[key] = rawValue === "true"; // auto_compress.enabled(裸 bool,TOML 只认小写字面量)
     } else {
       parsed.errors.push({ line: lineNo, message: `非自家产出形态:无法解析的值 \`${rawValue}\`` });
     }

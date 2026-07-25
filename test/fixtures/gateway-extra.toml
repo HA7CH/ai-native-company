@@ -1,4 +1,11 @@
 # 示例:未建模全局段的显式逃生门(裁决 12)
+#
+# 键的层级必须对准上游结构体:cc-connect 对未知键**没有** Undecoded 校验,
+# 写错位置零报错、静默丢弃。api_key 属于 [speech.<provider>] 子表,写在
+# [speech] 顶层会被吃掉;enabled 不写(默认 false)则整段是关的。
 [speech]
+enabled = true
 provider = "openai"
+
+[speech.openai]
 api_key = "${ANC_SPEECH_KEY}"

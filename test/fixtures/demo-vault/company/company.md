@@ -7,7 +7,7 @@ platform: feishu             # v1 唯一取值
 defaults:
   model: claude-sonnet-5
   mode: dontAsk              # 角色 bot 默认权限档
-  auto_compress_max_tokens: 120000
+  auto_compress_max_tokens: 12000   # 口径 = IM 对话历史字符数/4(不含工具输出),非 Claude 上下文
 admins: [alice]
 sync_interval_min: 15
 fallback_provider:

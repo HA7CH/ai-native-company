@@ -12,7 +12,7 @@ import * as assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { test } from "node:test";
-import { FINGERPRINT_RE, parseAncToml, renderConfig } from "../src/render/toml";
+import { disabledCommands, FINGERPRINT_RE, gatewayLanguage, parseAncToml, renderConfig } from "../src/render/toml";
 import { validateRoundTrip, validateSemantic } from "../src/render/validate";
 import {
   fixtureSecrets,
@@ -134,12 +134,84 @@ test("golden:allow_from 去重且含本人与全部 admin", () => {
   const adminIds = org.company.admins.map((a) => org.members.find((m) => m.name === a)?.feishu.open_id);
   for (const p of parsed.projects) {
     for (const platform of p.platforms) {
-      const allow = platform.options["allow_from"] as string[];
+      const allow = (platform.options["allow_from"] as string).split(",");
       assert.deepEqual(allow, [...new Set(allow)], "allow_from 必须去重");
       for (const admin of adminIds) assert.ok(allow.includes(admin as string), "allow_from 必须含全部 admin");
       assert.ok(!allow.includes("*"), "allow_from 不得含通配符");
     }
   }
+});
+
+test("golden:allow_from/allow_chat 必须是逗号串 —— 数组形态在上游等于全员放行", () => {
+  // 这条钉的是一个真实的 fail-open:上游 14 个 platform 一律 `opts["allow_from"].(string)`
+  // (v1.3.4 platform/feishu/feishu.go:222),TOML 数组解出 []any → 断言失败 → 空串,
+  // 而 core.AllowList 对空串 `return true`,任何人都能对话。形态错不会报错、只在 stdout
+  // 留一条 warn,所以必须由我们自己钉死。
+  const { rendered } = renderFixturePipeline();
+  const parsed = parseAncToml(rendered.text);
+  for (const p of parsed.projects) {
+    const name = p.top["name"];
+    for (const platform of p.platforms) {
+      assert.equal(typeof platform.options["allow_from"], "string", `${name} 的 allow_from 必须是字符串`);
+      const chat = platform.options["allow_chat"];
+      if (chat !== undefined) assert.equal(typeof chat, "string", `${name} 的 allow_chat 必须是字符串`);
+    }
+  }
+  assert.ok(!/allow_from\s*=\s*\[/.test(rendered.text), "渲染文本不得出现 allow_from = [");
+  assert.ok(!/allow_chat\s*=\s*\[/.test(rendered.text), "渲染文本不得出现 allow_chat = [");
+});
+
+test("golden:language 映射为上游字面量 —— 原样透传会招致上游回写我们的 config", () => {
+  // 上游 switch(cmd/cc-connect/main.go:331-345)只认 zh/zh-TW/ja/es/en 等字面量,其余一律
+  // 落 LangAuto;而**仅当** LangAuto 时才注册语言回写钩子(main.go:801-805),第一条中文消息
+  // 就会 SaveLanguage 就地 patch config.toml(顺带经 formatTOML 删空段)—— 指纹立即失配,
+  // deploy 会把上游的自动回写误判成人为手改事故。org 侧写 BCP-47,渲染层负责映射。
+  const { org, rendered } = renderFixturePipeline();
+  assert.equal(org.company.language, "zh-CN", "fixture 以 BCP-47 书写(映射的输入侧)");
+  assert.match(rendered.text, /^language = "zh"$/m, "渲染产物必须是上游认得的 zh");
+
+  assert.equal(gatewayLanguage("zh-CN"), "zh");
+  assert.equal(gatewayLanguage("zh-Hans"), "zh");
+  assert.equal(gatewayLanguage("zh-TW"), "zh-TW");
+  assert.equal(gatewayLanguage("en-US"), "en");
+  // 不可映射的取值必须拒渲,绝不原样透传
+  assert.throws(() => gatewayLanguage("de-DE"), /无法映射/);
+  assert.throws(() => gatewayLanguage("zh-CN-x-private"), /无法映射/);
+});
+
+test("golden:auto_compress 显式 enabled —— 只写 max_tokens 是语义失效的死配置", () => {
+  // 上游 `Enabled *bool` 默认 nil(config.go:442 注释 "default false"),
+  // main.go:619 `if Enabled != nil && *Enabled` 直接短路。
+  const { rendered } = renderFixturePipeline();
+  const parsed = parseAncToml(rendered.text);
+  for (const p of parsed.projects) {
+    const ac = p.autoCompress;
+    assert.ok(ac, `${p.top["name"]} 应有 auto_compress 段`);
+    assert.equal(ac["enabled"], true, `${p.top["name"]} 的 auto_compress 必须显式 enabled = true`);
+    assert.equal(typeof ac["max_tokens"], "number");
+  }
+});
+
+test("golden:disabled_commands 封住 /mode 运行时提权与 config 回写", () => {
+  // /mode 不在上游 privilegedCommands 表(core/engine.go:1004),cmdMode 也不校验管理员 ——
+  // 任何 allow_from 内的用户发 `/mode bypassPermissions` 即可提权角色 bot。渲染 config 挡不住,
+  // 只能靠 project 级 disabled_commands。/provider 与 /model 则会回写 config.toml 制造指纹漂移。
+  const { rendered } = renderFixturePipeline();
+  const parsed = parseAncToml(rendered.text);
+  for (const p of parsed.projects) {
+    const name = p.top["name"] as string;
+    const dc = p.top["disabled_commands"];
+    assert.ok(Array.isArray(dc), `${name} 必须渲染 disabled_commands`);
+    const list = dc as string[];
+    assert.ok(list.includes("provider") && list.includes("model"), `${name} 必须禁 provider/model(config 回写)`);
+    if (name === "demo-devbot") {
+      assert.ok(!list.includes("mode"), "devbot 本就是最高权限档,不禁 mode");
+    } else {
+      assert.ok(list.includes("mode"), `${name} 是角色 bot,必须禁 mode(SPEC §7 红线的运行时闭环)`);
+    }
+  }
+  assert.deepEqual(disabledCommands(false), ["mode", "provider", "model"]);
+  assert.deepEqual(disabledCommands(true), ["provider", "model"]);
 });
 
 test("golden:gateway-extra 原样并入且被标记段包裹", () => {

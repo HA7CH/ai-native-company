@@ -1,10 +1,11 @@
-# anc:generated v=0.0.0 inputs=9f5345e0e69dd744407556d1c646c6dcba37ba71800c022fbc6382511590a02d at=2026-01-01T00:00:00.000Z
+# anc:generated v=0.0.0 inputs=cf6c03ba8ae6d3309e2bfb2f0a7ff02d5b104f251d1aba2cf690cf834056ad17 at=2026-01-01T00:00:00.000Z
 # 本文件由 anc 全量生成;手改视为事故 —— 修改请编辑 org 真相源后运行 anc deploy config(SPEC §4.2)。
 
-language = "zh-CN"
+language = "zh"
 data_dir = "/opt/anc-test/dot-anc/data"
 
 [log]
+level = "info"
 
 [display]
 mode = "full"
@@ -13,9 +14,11 @@ mode = "full"
 name = "demo-alice"
 admin_from = "ou_***alice"
 reset_on_idle_mins = 30
+disabled_commands = ["mode", "provider", "model"]
 
 [projects.auto_compress]
-max_tokens = 120000
+enabled = true
+max_tokens = 12000
 
 [projects.agent]
 type = "claudecode"
@@ -90,15 +93,17 @@ type = "feishu"
 [projects.platforms.options]
 app_id = "cli_***alice"
 app_secret = "${ANC_FEISHU_SECRET_ALICE}"
-allow_from = ["ou_***alice", "ou_***assist"]
+allow_from = "ou_***alice,ou_***assist"
 
 [[projects]]
 name = "demo-bob"
 admin_from = "ou_***alice"
 reset_on_idle_mins = 30
+disabled_commands = ["mode", "provider", "model"]
 
 [projects.auto_compress]
-max_tokens = 120000
+enabled = true
+max_tokens = 12000
 
 [projects.agent]
 type = "claudecode"
@@ -170,16 +175,18 @@ type = "feishu"
 [projects.platforms.options]
 app_id = "cli_***bob"
 app_secret = "${ANC_FEISHU_SECRET_BOB}"
-allow_from = ["ou_***bob", "ou_***alice"]
-allow_chat = ["oc_***sales"]
+allow_from = "ou_***bob,ou_***alice"
+allow_chat = "oc_***sales"
 
 [[projects]]
 name = "demo-devbot"
 admin_from = "ou_***alice"
 reset_on_idle_mins = 30
+disabled_commands = ["provider", "model"]
 
 [projects.auto_compress]
-max_tokens = 120000
+enabled = true
+max_tokens = 12000
 
 [projects.agent]
 type = "claudecode"
@@ -244,11 +251,18 @@ type = "feishu"
 [projects.platforms.options]
 app_id = "cli_***devbot"
 app_secret = "${ANC_FEISHU_SECRET_DEVBOT}"
-allow_from = ["ou_***founder", "ou_***alice"]
+allow_from = "ou_***founder,ou_***alice"
 
 # anc:extra-begin —— 以下内容原样并入自 ~/.anc/gateway-extra.toml(round-trip 校验跳过,diff 单独标示)
 # 示例:未建模全局段的显式逃生门(裁决 12)
+#
+# 键的层级必须对准上游结构体:cc-connect 对未知键**没有** Undecoded 校验,
+# 写错位置零报错、静默丢弃。api_key 属于 [speech.<provider>] 子表,写在
+# [speech] 顶层会被吃掉;enabled 不写(默认 false)则整段是关的。
 [speech]
+enabled = true
 provider = "openai"
+
+[speech.openai]
 api_key = "${ANC_SPEECH_KEY}"
 # anc:extra-end

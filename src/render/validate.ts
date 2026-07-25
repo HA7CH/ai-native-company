@@ -164,17 +164,42 @@ export function validateSemantic(rendered: RenderedConfig, ctx: SemanticContext)
           seenAppIds.set(appId, name);
         }
       }
-      const allowFrom = platform.options["allow_from"];
-      if (Array.isArray(allowFrom)) {
-        for (const id of allowFrom) {
+      // allow_from / allow_chat 必须是逗号分隔字符串:上游一律 `opts["allow_from"].(string)`,
+      // TOML 数组解出 []any 断言失败 → 空串 → core.AllowList 放行任意用户。形态错 = 安全边界失效,
+      // 且上游只在 stdout 留一条 warn 不阻断启动 —— 这道校验是该形态的唯一防线。
+      for (const listKey of ["allow_from", "allow_chat"] as const) {
+        const raw = platform.options[listKey];
+        if (raw === undefined) {
+          if (listKey === "allow_from") {
+            issues.push(err("SEM-WILDCARD", `project \`${name}\` 的 platforms.options 缺 allow_from 白名单 —— 上游对空值 fail-open(允许所有人)`));
+          }
+          continue; // allow_chat 可选:不写 = 上游默认放行全部群,由 group_only 等另行约束
+        }
+        if (Array.isArray(raw)) {
+          issues.push(
+            err(
+              "SEM-ALLOWLIST-TYPE",
+              `project \`${name}\` 的 ${listKey} 渲染成了 TOML 数组 —— 上游只认逗号分隔字符串,` +
+                `数组会让类型断言失败并退化为「允许所有人」(fail-open),必须是 "a,b" 形态`,
+            ),
+          );
+          continue;
+        }
+        if (typeof raw !== "string" || raw.trim() === "") {
+          issues.push(err("SEM-WILDCARD", `project \`${name}\` 的 ${listKey} 为空 —— 上游对空值 fail-open(允许所有人)`));
+          continue;
+        }
+        const prefix = listKey === "allow_from" ? "ou_" : "oc_";
+        for (const rawId of raw.split(",")) {
+          const id = rawId.trim();
           if (id === "*") {
-            issues.push(err("SEM-WILDCARD", `project \`${name}\` 的 allow_from 含通配符 "*" —— 白名单默认关闭注册(SPEC §7)`));
-          } else if (!/^ou_/.test(id)) {
-            issues.push(err("SEM-OPENID", `project \`${name}\` 的 allow_from 含非 ^ou_ 值:${JSON.stringify(id)}`));
+            issues.push(err("SEM-WILDCARD", `project \`${name}\` 的 ${listKey} 含通配符 "*" —— 白名单默认关闭注册(SPEC §7)`));
+          } else if (id === "") {
+            issues.push(err("SEM-OPENID", `project \`${name}\` 的 ${listKey} 含空条目(多余逗号)—— 上游按逗号切分,空段等于噪声`));
+          } else if (!id.startsWith(prefix)) {
+            issues.push(err("SEM-OPENID", `project \`${name}\` 的 ${listKey} 含非 ^${prefix} 值:${JSON.stringify(id)}`));
           }
         }
-      } else {
-        issues.push(err("SEM-WILDCARD", `project \`${name}\` 的 platforms.options 缺 allow_from 白名单`));
       }
     }
 

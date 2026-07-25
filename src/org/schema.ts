@@ -36,7 +36,15 @@ export interface SchemaIssue {
 export interface CompanyDefaults {
   model: string;
   mode: PermissionMode;
-  /** 可选;缺省 = 不渲染 [projects.auto_compress] 段(W1 实测项 ④) */
+  /**
+   * 可选;缺省 = 不渲染 [projects.auto_compress] 段。
+   *
+   * **口径警告**:这不是 Claude Code 的真实上下文占用,而是 cc-connect 自己维护的会话历史
+   * 估算 —— `len([]rune(content))/4`,且 History 只含 IM 里的 user 消息与 assistant 最终回复
+   * (core/engine.go:3353/4163),**不含工具输出、文件内容、系统提示**;session 空闲重置时还会
+   * 清空。所以取值要按「纯对话文本字符数 ÷ 4」估,不能套 Claude 的 200k 上下文window。
+   * 上游默认 12000(约 4.8 万字符对话);填 12 万级别等于该特性永不触发。
+   */
   auto_compress_max_tokens?: number;
 }
 
@@ -657,14 +665,22 @@ export function buildMember(fm: FmResult, file: string, dirName: string): BuildR
   const fmMap = r.requireMap("feishu");
   if (fmMap) {
     const f = new MapReader(fmMap, "feishu", r);
-    const app_id = f.requireString("app_id", { pattern: /^cli_.+$/, patternMsg: "须以 cli_ 开头(飞书自建应用 App ID)" });
-    const open_id = f.requireString("open_id", { pattern: /^ou_.+$/, patternMsg: "须以 ou_ 开头(飞书用户 open_id)" });
+    // 一律禁逗号与空白:allow_from/allow_chat/admin_from 在上游是**逗号分隔字符串**,
+    // 含逗号的 id 会被 strings.Split 切成两半、两半都匹配不上任何人 —— 静默失效且无日志。
+    // 字符集保留 `*`:ou_*** / cli_*** 是本库既定的脱敏占位符约定(CLAUDE.md)。
+    const NO_SEP = "不得含逗号或空白 —— 上游按逗号切分白名单,含分隔符的 id 会被切断并静默失效";
+    const app_id = f.requireString("app_id", { pattern: /^cli_[^\s,]+$/, patternMsg: `须以 cli_ 开头(飞书自建应用 App ID),${NO_SEP}` });
+    const open_id = f.requireString("open_id", { pattern: /^ou_[^\s,]+$/, patternMsg: `须以 ou_ 开头(飞书用户 open_id),${NO_SEP}` });
     const extra_allow_from = f.optionalStringArray("extra_allow_from", {
-      itemPattern: /^ou_.+$/,
-      itemMsg: "须以 ou_ 开头(通配符与用户名不接受)",
+      itemPattern: /^ou_[^\s,]+$/,
+      itemMsg: `须以 ou_ 开头(通配符与用户名不接受),${NO_SEP}`,
       banWildcard: true,
     });
-    const allow_chat = f.optionalStringArray("allow_chat", { banWildcard: true });
+    const allow_chat = f.optionalStringArray("allow_chat", {
+      itemPattern: /^oc_[^\s,]+$/,
+      itemMsg: `须以 oc_ 开头(飞书群 chat_id),${NO_SEP}`,
+      banWildcard: true,
+    });
     f.rejectUnknownKeys();
     feishu = { app_id, open_id, extra_allow_from, allow_chat };
   }
