@@ -292,7 +292,9 @@ TS 模板函数,三原型参数化:`{label, program_args, archetype: keepalive|i
 1. **golden / 单元(CI: GitHub Actions macOS runner)**:org fixture → config.toml 快照对拍(确定性输出是前提);persona 转义 fuzz(中文/emoji/引号/`'''`/`${`/裸换行);校验负例集(admin_from 错层、重复 app_id、secret 未定义、bypass 越权、无指纹覆盖、未给 --allow-scale 的增删)每例必须被对应校验器拦下;plist 生成 → `plutil -lint` + 断言无 SessionCreate。
 2. **记录式 fake exec 注入层**:`util/exec.ts` 双实现,launchd/git/claude 调用在测试中断言「发出了什么命令序列」(bootout→bootstrap 顺序、gui 域前缀)而不真执行——installer 编排逻辑 CI 可全测。
 3. **`anc selftest --sandbox`**(launchd 真行为的唯一真实测试,进发版 checklist):`com.anc.test.*` 前缀 + mock gateway 真实走 bootout/bootstrap/kickstart/探针/回滚全链,自动清理。
-4. **cc-connect 当 TOML oracle**:渲染产物 + 假 secret 启动真 cc-connect,短窗口内无 config parse error 即结构合法(随后 kill)——零依赖拿到全量真解析验证(fail-fast 行为属 W1 实测项 ③)。
+4. **TOML oracle 两级**:
+   - *开发期(已落地,CI 可跑)*:mini 解析器的取值语义与两个独立 TOML 1.0 实现(`@iarna/toml`、`smol-toml`)逐例对拍,期望值固化为 `test/toml-roundtrip.test.ts` 的字面断言 —— 仓库仍零运行时依赖,对拍在开发期一次性完成。这道 oracle 抓的是**渲染器与自家解析器是否对同一份字节达成一致**;W1 曾因「多行 literal 尾换行归属」在此失守(round-trip 全员误报),故此项不可省。
+   - *部署期*:渲染产物 + 假 secret 启动真 cc-connect,短窗口内无 config parse error 即结构合法(随后 kill)—— 端到端确认上游确实吃得下我们产出的形态(fail-fast 行为属 W1 实测项 ③)。
 5. **本机第二 macOS 用户** = 穷人版干净机:独立 gui launchd 域、独立 HOME/keychain,GUI 登录一次后全流程真跑 init→doctor→deploy;doctor 的每个 FAIL 提示就是 onboarding checklist 的验收素材。
 
 ### 8.2 Climax 切换(验收 1:行为不回退,目标第 4 周)

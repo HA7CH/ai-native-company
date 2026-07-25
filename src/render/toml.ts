@@ -7,8 +7,10 @@
  * - 其余字符串统一 basic string + 最小转义(\ / " / 控制字符);key 全部由生成器白名单产出。
  * - 指纹头 inputs = org 树 + host 相关字段 + gateway-extra.toml 的联合 hash ——
  *   只改主机层输入同样触发重渲染,不会被「org 未变」短路漏掉。
- * - mini round-trip 解析器只认「本生成器产出形态」;TOML 真解析 oracle 由 cc-connect
- *   启动烟测补位(W1 实测项 ③)。畸形手改文件不在保护范围 —— 手改本身即事故。
+ * - mini round-trip 解析器只认「本生成器产出形态」,但取值语义必须与真 TOML 一致:
+ *   其值模型(尤其多行 literal 的尾换行归属、数组元素转义)已与两个独立 TOML 实现
+ *   逐例对拍,期望值固化在 test/toml-roundtrip.test.ts。cc-connect 启动烟测继续作为
+ *   端到端 oracle 补位(W1 实测项 ③)。畸形手改文件不在保护范围 —— 手改本身即事故。
  *
  * 本模块为纯函数(Org → 字符串),不碰磁盘。
  */
@@ -59,13 +61,30 @@ function stringArray(items: string[]): string {
   return `[${items.map(basicString).join(", ")}]`;
 }
 
-/** ''' multi-line literal:开头三引号后紧跟换行;内容不得含 '''(persona lint 拒渲兜底)。 */
+/**
+ * ''' multi-line literal:开头三引号后紧跟换行(TOML 吞掉该换行),闭合 ''' 独占一行。
+ * 内容不得含 '''(persona lint 拒渲兜底)。
+ *
+ * 尾部换行归一化为恰好一个 —— 闭合定界符必须独占一行才能被 mini 解析器按行识别。
+ * 这是本函数对内容的唯一改写;改写后的确切值由 literalBlockValue() 给出(hash 锚点用它)。
+ */
 export function literalBlock(s: string): string {
   if (s.includes("'''")) {
     throw new Error("literalBlock: 内容含 '''(persona lint 应已拒渲)—— 渲染器拒绝产出非法 TOML");
   }
   const body = s.replace(/\n+$/, "");
   return `'''\n${body}\n'''`;
+}
+
+/**
+ * literalBlock(s) 写进文件后、被 TOML 解析器读回的确切值。
+ *
+ * 依据 TOML 1.0「多行 literal 只吞开定界符后紧跟的那个换行,其余内容原样」——
+ * 所以末行结尾那个换行属于值,不属于定界符。期望值已由两个独立 TOML 实现对拍确认,
+ * 并固化为 test/toml-roundtrip.test.ts 的字面断言(本库零运行时依赖,不引真解析器)。
+ */
+export function literalBlockValue(s: string): string {
+  return `${s.replace(/\n+$/, "")}\n`;
 }
 
 export function envVarSafeName(name: string): string {
@@ -119,7 +138,12 @@ export interface RenderConfigInput {
 export interface RenderedConfig {
   text: string;
   inputsHash: string;
-  /** project 名 → persona 内容 SHA256(round-trip 校验的对拍锚点) */
+  /**
+   * project 名 → persona 落进 TOML 后的确切值的 SHA256(round-trip 校验的对拍锚点)。
+   * 锚点取 literalBlockValue(persona) 而非 persona 原文:literalBlock 会把尾部换行归一为
+   * 恰好一个,锚点必须对准「gateway 真正会读到的字节」。persona.ts 的产物本就以恰好一个
+   * 换行结尾,故实际管线中二者逐字节相同(该不变量由 toml-roundtrip 测试钉住)。
+   */
   personaSha: Record<string, string>;
   projectNames: string[];
 }
@@ -184,7 +208,7 @@ export function renderConfig(input: RenderConfigInput): RenderedConfig {
     const isDevbot = role.role === DEVBOT_ROLE;
     const pname = projectName(org.company.id, member.name);
     projectNames.push(pname);
-    personaSha[pname] = sha256(persona);
+    personaSha[pname] = sha256(literalBlockValue(persona));
 
     L.push("");
     L.push("[[projects]]");
@@ -353,7 +377,17 @@ function parseArrayValue(text: string, lineNo: number, errors: ParsedConfig["err
         else if (n === "n") value += "\n";
         else if (n === "t") value += "\t";
         else if (n === "r") value += "\r";
-        else {
+        else if (n === "u") {
+          // basicString 对控制字符产出 \uXXXX —— 数组元素与标量必须同构,否则自家产出读不回
+          const hex = inner.slice(j + 2, j + 6);
+          if (!/^[0-9a-fA-F]{4}$/.test(hex)) {
+            errors.push({ line: lineNo, message: "数组元素非法 \\u 转义" });
+            return undefined;
+          }
+          value += String.fromCharCode(parseInt(hex, 16));
+          j += 6;
+          continue;
+        } else {
           errors.push({ line: lineNo, message: `非自家产出形态:数组元素未知转义 \\${n ?? ""}` });
           return undefined;
         }
@@ -416,7 +450,8 @@ export function parseAncToml(text: string): ParsedConfig {
       continue;
     }
 
-    const tableMatch = /^\[(\[)?([A-Za-z0-9_.]+)\]?\]$/.exec(line.trim());
+    // 只认单层 [name];[[name]] 形态在上面按字面量逐一匹配,漏网的一律报错(`[log]]` 不放过)
+    const tableMatch = /^\[([A-Za-z0-9_.]+)\]$/.exec(line.trim());
     if (line.trim().startsWith("[")) {
       const t = line.trim();
       if (t === "[[projects]]") {
@@ -471,8 +506,8 @@ export function parseAncToml(text: string): ParsedConfig {
         } else {
           target = platform.options;
         }
-      } else if (tableMatch && !tableMatch[1] && KNOWN_GLOBAL_TABLES.has(tableMatch[2] as string)) {
-        const name = tableMatch[2] as string;
+      } else if (tableMatch && KNOWN_GLOBAL_TABLES.has(tableMatch[1] as string)) {
+        const name = tableMatch[1] as string;
         parsed.tables[name] = parsed.tables[name] ?? {};
         target = parsed.tables[name] as Target;
       } else {
@@ -509,7 +544,9 @@ export function parseAncToml(text: string): ParsedConfig {
         i = lines.length;
         continue;
       }
-      target[key] = body.join("\n");
+      // 每行末尾的换行都属于值:闭合 ''' 之前的那个换行是内容的一部分,不是定界符的
+      // (TOML 1.0 只吞开定界符后紧跟的那个换行)。body 为空才是空串。
+      target[key] = body.length === 0 ? "" : `${body.join("\n")}\n`;
       i = j + 1;
       continue;
     }

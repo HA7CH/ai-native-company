@@ -2,7 +2,8 @@
  * validate.ts —— 三重校验(M1-DESIGN §4.4;吸收 cc-allow.sh 规则)。
  *
  *   1. 结构校验(round-trip):mini 解析器读回生成文本,projects 数 == 启用成员数、
- *      app_id 集合一致、每个 append_system_prompt 的 SHA256 == 渲染输入 hash;
+ *      app_id 集合一致、每个 append_system_prompt 的 SHA256 == 渲染锚点 hash
+ *      (锚点 = literalBlockValue(persona),即 gateway 真正会读到的字节,见 toml.ts);
  *   2. 语义校验:^ou_ / app_id 唯一 / admin_from 在 project 顶层 / ${ANC_*} 在 secrets
  *      中非空 / bypass 仅 devbot(SPEC §7 红线,无豁免开关)/ extra 段 secret 只许
  *      ${ENV} / devbot 之外 allowed_tools 非空 / allow_from 无 "*" / 指纹头存在;
