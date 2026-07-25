@@ -1,7 +1,7 @@
 {
   "name": "@ha7ch/ai-native-company",
   "version": "0.0.0",
-  "description": "把你的团队变成 AI native company:一台 Mac mini,一人一个 bot,公司知识全在 markdown 里。One Mac mini, one bot per person, all company knowledge in markdown.",
+  "description": "不搬家、不换软件、不培训:聊一次天,三个人的公司也有共享大脑。数据在你自己的云,纯 markdown。No migration, no dashboard, no training — one conversation gives a three-person company a shared brain, in plain markdown on your own cloud.",
   "license": "MIT",
   "repository": {
     "type": "git",
