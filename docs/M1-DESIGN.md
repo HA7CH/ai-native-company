@@ -92,8 +92,9 @@ timezone: Asia/Shanghai
 platform: feishu             # v1 唯一取值
 defaults:
   model: claude-sonnet-5
-  mode: dontAsk              # 角色 bot 默认权限档(W1 实测项 ①,见 §10)
-  auto_compress_max_tokens: 120000   # 可选;缺省 = 不渲染 auto_compress 段(W1 实测项 ④)
+  mode: dontAsk              # 角色 bot 默认权限档(§10 ① 已确证接受与透传;
+                             # 但该档下 allowed_tools 是否真可用仍待烟测,见 §10.1 第 1 条)
+  auto_compress_max_tokens: 12000    # 可选;缺省 = 不渲染 auto_compress 段。口径见 §4.1 注
 admins: [alice]              # member id 列表 → 所有 project 的 admin_from
 sync_interval_min: 15
 fallback_provider:           # 可选兜底 provider;缺省 = 不渲染 providers 段
@@ -159,8 +160,11 @@ disabled: false              # true = 渲染时跳过该 project(离职停用而
 | `name` | `<company.id>-<member.name>` | 顺序 = members 目录名排序 + devbot 殿后(输出确定性,diff 稳定) |
 | `admin_from` | company.admins 的 open_id 逗号串 | **必须写 project 顶层**(写进 platforms.options 被上游静默忽略,渲染器硬编码位置 + 校验器专项检查) |
 | `reset_on_idle_mins` | 常量 30 | |
-| `[projects.auto_compress]` | **可选**:defaults.auto_compress_max_tokens 存在才渲染 | 上游已有的阈值治理特性,承接生产 wrapper 的 /compact 兜底(注意:#1111 的 reuse-mode 深层治理仍缺,非本项能补);新公司默认开,存量迁移按现状 |
-| `[[projects.agent.providers]]` | **可选**:company.fallback_provider(name/base_url/model),api_key = `${ANC_PROVIDER_KEY_<NAME>}`;providers.env 可带成本控制变量 | 兜底 provider(SPEC §8);存量部署若已挂 fallback,迁移「不回退」必需 |
+| `[projects.auto_compress]` | **可选**:defaults.auto_compress_max_tokens 存在才渲染;**必带 `enabled = true`** | 上游 `Enabled *bool` 默认 nil,`main.go:619` 只认显式 true —— 只写 max_tokens 是语法合法、语义失效的死配置。**阈值口径**:上游 `estimateTokens` = cc-connect 自维护会话历史的 `len([]rune)/4`,History 只含 IM 的 user 消息与 assistant 最终回复,**不含工具输出/文件内容/系统提示**,空闲重置即清空 —— 按「纯对话字符数 ÷ 4」估,不可套 Claude 的上下文 window(填 12 万级 = 永不触发)。上游默认 12000。#1111 的 reuse-mode 深层治理仍缺,非本项能补 |
+| `[[projects.agent.providers]]` | **可选**:company.fallback_provider(name/base_url/model),api_key = `${ANC_PROVIDER_KEY_<NAME>}` | **是预登记的备用候选,不是自动兜底**:v1.3.4 全仓无 failover —— `SetActiveProvider` 的调用点无一在错误/限流/额度路径上,`providerproxy.go` 不是路由器;且 `wireAgentProviders` 仅在 `options.provider` 非空时激活,我们不渲染该键,故候选**登记而不激活**,bot 走 Claude Code 自带订阅鉴权(这正是期望的默认态,额度触顶时由人手动切)。自动兜底登记为上游缺口(SPEC §8);唯一源码支持的自动路由是 `router_url`,M1 不做,记 M3 备选 |
+| `disabled_commands` | project 顶层常量:角色 bot `["mode","provider","model"]`;devbot `["provider","model"]` | **SPEC §7 红线的运行时闭环**:`/mode` 不在上游 privilegedCommands 表且 cmdMode 不校验管理员,任何白名单用户发 `/mode bypassPermissions` 即可提权角色 bot,渲染 config 挡不住。`/provider`、`/model` 会 patch 回写 config.toml 制造指纹漂移,故全员禁 |
+| 顶层 `language` | company.language 经**映射**为上游字面量(zh-CN→zh) | 上游只认 zh/zh-TW/ja/es/en 等字面量,其余落 LangAuto;**而仅 LangAuto 会注册语言回写钩子**,第一条中文消息就 patch 我们的 config(并经 formatTOML 删空段)→ 指纹失配、被误判为人为手改。org 侧仍写 BCP-47,渲染层映射,不可映射的取值拒渲 |
+| `[log] level` | 常量 `"info"` | 写全而非留空段:上游 formatTOML 会删除「表头后只跟空行」的空段,任何回写都会抹掉空 `[log]`。该段合法键只有 `level` |
 | `[projects.agent] type` | `"claudecode"` | |
 | `options.work_dir` | `~/.anc/homes/<member>`;devbot → vault 根 | init 建目录 + attachments/ |
 | `options.model` | member.model ∥ role.model ∥ company.defaults.model | 三级回退 |
@@ -169,8 +173,8 @@ disabled: false              # true = 渲染时跳过该 project(离职停用而
 | `options.append_system_prompt` | 渲染后 persona,`'''` 多行 literal | §4.2/§4.3 |
 | `[[projects.platforms]] type` | `"feishu"` | |
 | `platforms.options.app_id / app_secret` | member.feishu.app_id / `${ANC_FEISHU_SECRET_<NAME>}` | |
-| `platforms.options.allow_from` | member.open_id + member.feishu.extra_allow_from + admins open_id 去重 | Set 语义(抄 access.sh);绝不渲染 `"*"` |
-| `platforms.options.allow_chat` | member.feishu.allow_chat | 空 = 不写 |
+| `platforms.options.allow_from` | member.open_id + member.feishu.extra_allow_from + admins open_id 去重,**逗号串** | Set 语义(抄 access.sh);绝不渲染 `"*"`。**必须是逗号分隔字符串,不能是 TOML 数组** —— 上游 14 个 platform 一律 `opts["allow_from"].(string)`,数组解出 `[]any` 断言失败得空串,而 `core.AllowList` 对空串 `return true` = **放行任意用户**(fail-open,只在 stdout 留一条 warn 不阻断启动)。对照:`allowed_tools` 才是数组。校验器 `SEM-ALLOWLIST-TYPE` 把数组形态判为硬失败 |
+| `platforms.options.allow_chat` | member.feishu.allow_chat,**逗号串** | 空 = 不写;形态同 allow_from |
 | 全局段 | language、data_dir、[log]、[display](mode=full) | 常量模板,从生产 config 提炼默认块 |
 | 追加段 | `~/.anc/gateway-extra.toml`(600,可选) | 未建模全局段(如语音/TTS provider)的显式逃生门:原样并入文件尾部,diff 单独标示,round-trip 校验跳过、启动烟测覆盖(裁决 12) |
 
@@ -209,7 +213,7 @@ render(member):
 ### 4.4 原子写 + 三重校验 + dry-run
 
 1. **结构校验(round-trip)**:`toml.ts` 内置只认「本生成器产出形态」的 mini 解析器,把生成文本读回比对:projects 数 == 启用成员数、app_id 集合一致、每个 append_system_prompt 的 SHA256 == 渲染输入 hash。TOML 真解析 oracle 由 §8.1 的 cc-connect 启动烟测补位,不自写完整 parser(裁决 4)。
-2. **语义校验**:所有 open_id 匹配 `^ou_`;app_id 全局唯一;admin_from 在 project 顶层;每个 `${ANC_*}` 引用在 secrets.env 中存在且非空(缺 secret 拒绝上线,治「空凭据全员同挂」类事故于门外);角色 bot mode ≠ bypassPermissions(**SPEC §7 红线,无任何豁免开关**;存量部署若有角色 bot 曾以更宽档位运行,切换时一并收紧,作为已知行为变化在影子 diff 中显式列出并逐条 review);gateway-extra.toml 内凡 secret 类字段只允许 `${ENV}` 引用形态,出现明文赋值即拒(「config/备份/diff 全程无明文」的承诺覆盖 extra 段);devbot 之外 allowed_tools 非空;allow_from 无 `"*"`;文件含指纹头。
+2. **语义校验**:所有 open_id 匹配 `^ou_`;app_id 全局唯一;admin_from 在 project 顶层;每个 `${ANC_*}` 引用在 secrets.env 中存在且非空(缺 secret 拒绝上线,治「空凭据全员同挂」类事故于门外);角色 bot mode ≠ bypassPermissions(**SPEC §7 红线,无任何豁免开关**;存量部署若有角色 bot 曾以更宽档位运行,切换时一并收紧,作为已知行为变化在影子 diff 中显式列出并逐条 review);gateway-extra.toml 内凡 secret 类字段只允许 `${ENV}` 引用形态,出现明文赋值即拒(「config/备份/diff 全程无明文」的承诺覆盖 extra 段);devbot 之外 allowed_tools 非空;allow_from 无 `"*"`;**`allow_from`/`allow_chat` 必须是逗号分隔字符串——出现 TOML 数组形态即硬失败**(`SEM-ALLOWLIST-TYPE`;上游对数组 fail-open 放行所有人,见 §4.1);**白名单 id 内不得含逗号或空白**(上游按逗号切分,含分隔符的 id 被切断后两半都匹配不上任何人,静默失效);角色 bot 的 `disabled_commands` 必须含 `mode`(SPEC §7 红线的运行时闭环);文件含指纹头。
 3. **差分校验**:与现行 config 对比——现行 config **无 anc 指纹且未给 `--adopt` 时拒绝覆盖**(防误杀手写生产配置,Climax 首次接管的关键防线);**新增或删除 project 均需显式 `--allow-scale`**(members 目录一次误操作不能静默上线/下线任何 bot);逐 project 给 persona/allow_from/model 变更摘要,secret 已是 env 引用,diff 可安全全文打印。
 
 落盘流程(吸收 cc-allow.sh):时间戳备份 → temp 同目录写 + fsync → rename → `launchctl kickstart -k gui/$UID/com.<id>.gateway` → 探针(**90s** 窗口:job running、pid 存在、连续两次采样 pid 不变且 runs 不涨、gateway 日志出现每 project 的功能级就绪标志)→ 探针失败自动还原备份并再 kickstart,退出码 3。**dry-run 是默认**,`--apply` 才落盘;inputs 指纹比对短路,「无变更,跳过重启」。
@@ -234,7 +238,7 @@ TS 模板函数,三原型参数化:`{label, program_args, archetype: keepalive|i
 |---|---|---|
 | `com.<id>.gateway` | RunAtLoad + KeepAlive | `~/.anc/bin/gateway.sh`:`set -a; source secrets.env; set +a; exec <cc-connect> --config <path> --force`(--force = 同 config 单实例抢占,根治「孤儿进程抢 IM 连接、时好时不回」);plist EnvironmentVariables 默认注入 `CLAUDE_CODE_DISABLE_1M_CONTEXT=1`(控成本,生产验证) |
 | `com.<id>.vault-sync` | StartInterval 900 + RunAtLoad | `vault/scripts/anc-sync.sh`:git pull --ff-only;一切失败记日志后 exit 0(不触发 launchd 重试风暴);输出截断 300 字符;**成功 touch `~/.anc/last-sync-ok`**(与 watchdog 共享的「输出新鲜度 + 成功标记」探测协议) |
-| `com.<id>.watchdog` | StartInterval 1800 | `anc-watchdog.sh`:**纯 shell + curl,不依赖 node/anc**(监控者不依赖被监控链路上的任何组件);查 ① gateway pid 双读稳定(间隔 5s 两次 print,pid 不变且 runs 不涨)② gateway 日志 30min 内有输出 ③ last-sync-ok < 45min;异常 → 有 webhook 则 curl 喊运维群(2h 冷却文件防刷屏),并 kickstart gateway 有界自愈(1h 内最多 2 次,超限只告警不动手);自身失败也 exit 0 |
+| `com.<id>.watchdog` | StartInterval 1800 | `anc-watchdog.sh`:**纯 shell + curl,不依赖 node/anc**(监控者不依赖被监控链路上的任何组件);查 ① gateway pid 双读稳定(间隔 5s 两次 print,pid 不变且 runs 不涨)② **api.sock 探针应答**(`<data_dir>/run/api.sock`,curl --unix-socket)③ last-sync-ok < 45min;**注意:不得用「日志 N 分钟内有输出」做存活探测** —— W1 源码核对确认 gateway 空闲时零周期性日志(§10 假设 ⑤ 不成立),日志新鲜度会把正常空闲误报成挂死;api.sock 探针的实际行为(空会话返回码、agent 忙时是否阻塞)仍待烟测确认(§10.1 第 4 条),确认前 watchdog 以 ① + ③ 为准、②(探针)只记不告警;异常 → 有 webhook 则 curl 喊运维群(2h 冷却文件防刷屏),并 kickstart gateway 有界自愈(1h 内最多 2 次,超限只告警不动手);自身失败也 exit 0 |
 
 ### 5.3 `anc doctor` 检查清单
 
@@ -292,9 +296,7 @@ TS 模板函数,三原型参数化:`{label, program_args, archetype: keepalive|i
 1. **golden / 单元(CI: GitHub Actions macOS runner)**:org fixture → config.toml 快照对拍(确定性输出是前提);persona 转义 fuzz(中文/emoji/引号/`'''`/`${`/裸换行);校验负例集(admin_from 错层、重复 app_id、secret 未定义、bypass 越权、无指纹覆盖、未给 --allow-scale 的增删)每例必须被对应校验器拦下;plist 生成 → `plutil -lint` + 断言无 SessionCreate。
 2. **记录式 fake exec 注入层**:`util/exec.ts` 双实现,launchd/git/claude 调用在测试中断言「发出了什么命令序列」(bootout→bootstrap 顺序、gui 域前缀)而不真执行——installer 编排逻辑 CI 可全测。
 3. **`anc selftest --sandbox`**(launchd 真行为的唯一真实测试,进发版 checklist):`com.anc.test.*` 前缀 + mock gateway 真实走 bootout/bootstrap/kickstart/探针/回滚全链,自动清理。
-4. **TOML oracle 两级**:
-   - *开发期(已落地,CI 可跑)*:mini 解析器的取值语义与两个独立 TOML 1.0 实现(`@iarna/toml`、`smol-toml`)逐例对拍,期望值固化为 `test/toml-roundtrip.test.ts` 的字面断言 —— 仓库仍零运行时依赖,对拍在开发期一次性完成。这道 oracle 抓的是**渲染器与自家解析器是否对同一份字节达成一致**;W1 曾因「多行 literal 尾换行归属」在此失守(round-trip 全员误报),故此项不可省。
-   - *部署期*:渲染产物 + 假 secret 启动真 cc-connect,短窗口内无 config parse error 即结构合法(随后 kill)—— 端到端确认上游确实吃得下我们产出的形态(fail-fast 行为属 W1 实测项 ③)。
+4. **cc-connect 当 TOML oracle**:渲染产物 + 假 secret 启动真 cc-connect,短窗口内无 config parse error 即结构合法(随后 kill)——零依赖拿到全量真解析验证。fail-fast 行为已由源码核对确证为亚秒级(§10 假设 ③),**但执行必须遵守 §10.1 末尾的三条修正**:拷到独立临时目录跑(实例锁在 config 解析之前,`exit 1` 未必是 config 的错;绝不用 `--force`)、stdout 与 stderr 同时抓、优先用 `doctor user-isolation` 子命令。并牢记这道 oracle 只覆盖 TOML 语法与顶层 schema:上游对未知键无 `Undecoded()` 校验,写错层级的键静默丢弃、烟测照样绿(§10 发现 4)。
 5. **本机第二 macOS 用户** = 穷人版干净机:独立 gui launchd 域、独立 HOME/keychain,GUI 登录一次后全流程真跑 init→doctor→deploy;doctor 的每个 FAIL 提示就是 onboarding checklist 的验收素材。
 
 ### 8.2 Climax 切换(验收 1:行为不回退,目标第 4 周)
@@ -314,7 +316,7 @@ TS 模板函数,三原型参数化:`{label, program_args, archetype: keepalive|i
 
 1. **config 全量生成 vs patch 现有文件**:选全量。patch 意味着承认手工 config 并存,正是「双源手抄」生产头号事故的根因;接管存量部署的代价由 `--adopt` 门 + 影子渲染流程承担(存量规模小,可承受)。
 2. **persona 注入:append_system_prompt 内联 vs bot 家目录 CLAUDE.md**:选内联——现行 cc-connect gateway 形态已生产验证 5 周(多 bot 矩阵 8 周、vault 13+ 周,证据分开记账);work_dir 下 CLAUDE.md 的加载语义未经生产验证,两路并存会双注入。CLAUDE.md 路径(免重启生效、天然双 harness)列为 M3 与 Codex 一起重估。**SPEC §2.2 已同步注记此裁决**(cwd 的 persona 挂载语义用于直驱 harness 形态;经 gateway 部署时 persona 经渲染内联),不再构成与 SPEC 的偏离。
-3. **secret 走 `${ENV}` 引用 + wrapper source vs 明文写 config**:选 ENV 引用——config/备份/diff 全程无明文。cc-connect 对未定义变量的替换行为未知(W1 实测项 ②),校验器已强制「每个引用在 secrets.env 非空」兜底;若实测异常,回退明文 600 方案只改 toml.ts 一处。
+3. **secret 走 `${ENV}` 引用 + wrapper source vs 明文写 config**:选 ENV 引用——config/备份/diff 全程无明文。替换行为**已由 v1.3.4 源码核对确证**(§10 假设 ②):未定义变量替换为空串、只 warn 不报错,且只支持 `${IDENT}` 一种形态(`$VAR`、`${VAR:-default}` 不展开)。因此校验器「每个 `${ANC_*}` 引用在 secrets.env 中存在且非空」不是保守兜底而是**硬需求**:空 app_secret 会让整进程 `os.Exit(1)`(全部 bot 一起下线),配 KeepAlive 即崩溃重启循环。不回退明文方案。
 4. **TOML 校验不引依赖**:自写 mini round-trip(只认自家产出形态)+ cc-connect 启动烟测当真解析 oracle,不写完整 TOML parser(为过上游 2211 行 example 语料写完整 parser 是 4-6 周窗口内的隐性大坑)。畸形手改文件不在保护范围——全量生成模式下手改本身即事故。
 5. **shell 照搬 vs 全 TS**:sync/watchdog/gateway wrapper 保 shell——launchd 直跑无 node PATH 心智负担,sync 逻辑已长期生产验证,且监控者(watchdog)不得依赖被监控链路上的组件(node/anc);渲染/校验/launchctl 编排必须 TS(要结构化和可测)。
 6. **deploy personas 是同管线的窄门而非独立实现**:一条管线两个视图,不存在第二条上线路径;diff 范围硬断言给高频低危操作防误伤。
@@ -326,15 +328,43 @@ TS 模板函数,三原型参数化:`{label, program_args, archetype: keepalive|i
 12. **未建模字段的显式逃生门(gateway-extra.toml)**:全量生成制下,上游的语音/TTS 等未建模全局段若无出口,存量部署迁移就会丢能力。放本机层 `~/.anc/gateway-extra.toml`(600)原样并入,diff 单独标示、round-trip 跳过、烟测覆盖;**extra 段内 secret 同样只允许 `${ENV}` 引用**(校验器强制,§4.4 校验 2),明文赋值即拒——「config/备份/diff 全程无明文」的承诺无例外。逃生门是显式声明的,不破坏「渲染是唯一上线路径」。
 13. **迁移期权限档不豁免**:SPEC §7「角色 bot 一律不授予 bypassPermissions」是无例外红线,校验器不提供任何绕过开关。存量部署若有角色 bot 曾以更宽档位运行,切换时一并收紧到 SPEC 档位——这是「切换不回退」验收中唯一被允许且被要求的行为变化,在影子 diff 中显式列出、逐条 review、切换后重点观察。若实测收紧导致工作流不可用,处置是补 allowed_tools 白名单,不是回退权限档。
 
-## 10. W1 实测清单(设计中的未验证假设,第一周内出结论)
+## 10. W1 实测清单
 
-| # | 假设 | 验证法 | 不成立时的回退 |
+**核对基准**:cc-connect **v1.3.4 / commit 27c1de8** 源码。下表结论由源码核对得出(每条落到 file:line,并经独立复核推翻过初判),**不是烟测**——凡源码给不出答案的一律标「未确证」,不以推测充数。烟测待补清单见 §10.1。
+
+| # | 假设 | 结论 | 处置 |
 |---|---|---|---|
-| ① | `mode: dontAsk` 在 pin 的 1.3.4 被接受并正确透传(claude 本体的 dontAsk 档已实测存在;风险仅在 cc-connect 1.3.4 的档位白名单) | 1.3.4 二进制 + 烟测 config 实跑 | `default`/`acceptEdits` + allowed_tools 白名单组合 |
-| ② | `${ENV}` 未定义变量的替换行为(替空?保留字面?报错?) | 烟测 config 引用未定义变量观察 | 回退明文 600 方案(仅改 toml.ts) |
-| ③ | cc-connect 对 parse error 快速失败(烟测 oracle 的前提) | 喂坏 config 计时 | 烟测窗口拉长 / 改为日志关键字判定 |
-| ④ | `[projects.auto_compress]` 在 1.3.4 的字段名与语义(该段已设计为可选渲染) | 1.3.4 源码/文档核对 + 烟测 | 缺省不渲染即可,上下文治理登记为 M2 缺口 |
-| ⑤ | gateway 空闲时是否有周期性日志输出(watchdog「30min 内有输出」新鲜度探测的前提) | 烟测实例空闲观察 | 改用就绪标志时间戳 + 认证探针,不依赖日志频率 |
+| ① | `mode: dontAsk` 被 1.3.4 接受并正确透传 | **成立**。`normalizePermissionMode` 认 `dontask/dont-ask/dont_ask`,透传为 `--permission-mode` flag,网关侧同步置 `dontAsk` 开关。合法档六个(default/acceptEdits/plan/auto/bypassPermissions/dontAsk),我们 schema 的 4 值白名单是其安全子集 | 不回退。**但未知取值会静默回落 default 且无 warn**,config 层零校验 —— 我们的白名单是唯一防线,不可放宽 |
+| ② | `${ENV}` 未定义变量的替换行为 | **成立(替空 + 一条 warn)**。自写正则(非 `os.ExpandEnv`),故 `$VAR`、`${VAR:-default}` 均**不展开**;展开在 TOML 解析之后、对整棵配置树的字符串值生效,map 的 key 不替换 | 不回退明文方案。校验器「每个 `${ANC_*}` 在 secrets.env 非空」的强制**必须保留**:空 app_secret 会让**整进程 `os.Exit(1)`**(非单 bot 降级),配 KeepAlive 即崩溃重启循环 |
+| ③ | cc-connect 对 parse error 快速失败 | **成立(亚秒级)**。`config.Load` 是 main 里除 flag/日志/实例锁外第一件实质动作,失败即 `os.Exit(1)`,此前无网络阻塞 | 烟测判据按 §10.1 三条修正后使用;**「无 parse error」≠「配置合法」**:未知键、options 类型断言失败、mode/language 回落四类静默降级抓不到 |
+| ④ | `[projects.auto_compress]` 的字段名与语义 | **段名/层级/字段名成立,但语义前提被漏掉**:`enabled` 不显式为 true 则整段短路(默认 nil = false) | 已补 `enabled = true`;阈值口径一并修正(见 §4.1 注),从 120000 降到上游默认量级 12000 |
+| ⑤ | gateway 空闲时有周期性日志输出 | **不成立**。空闲态零周期性日志:限流清理循环体无日志、idle reaper 未启用、observer/heartbeat 默认关,飞书 WS 心跳被 `sanitizingLogger` 硬过滤 | **走回退**:watchdog 不得依赖日志新鲜度,改用 §5.2 的探针组合。唯一残余变数是 lark SDK 自身是否打点(见 §10.1) |
+
+**假设之外的四项发现**(核对全量配置键时查出,已在渲染器修复并配防回归测试):
+
+1. 🔴 `allow_from`/`allow_chat` 渲染成 TOML 数组 = **fail-open 全员放行**(详见 §4.1 该行)。这是本轮最严重的一条,三个 bot 全中。
+2. 🔴 `/mode` 非特权命令且不校验管理员 → **SPEC §7 红线在运行时可被任意白名单用户绕过**;渲染 config 挡不住,只能靠 `disabled_commands`。
+3. 🟠 `language = "zh-CN"` 落 LangAuto → 触发上游**回写我们全量生成的 config**,指纹失配并被误判为人为手改。
+4. 🟠 `[speech] api_key` 是死键(该字段只存在于 `[speech.<provider>]` 子表)。上游对未知键**无 `Undecoded()` 校验**,写错位置零报错、静默丢弃——逃生门(裁决 12)的代价必须写进文档,不能靠"配了就以为生效"。
+
+### 10.1 仍须真烟测才能定论(源码给不出答案)
+
+需在装有 cc-connect v1.3.4 二进制的机器上跑,按阻塞性排序:
+
+1. 🔴 **dontAsk 下 `allowed_tools` 里的工具是否真能用**。cc-connect 侧的 deny 分支**无条件拒绝一切 `can_use_tool`,不查任何白名单**,且排在 hooks 与 IM 审批之前;"allowed_tools 不受影响"在 cc-connect 源码里**查无实据**(唯一依据是一句面向用户的描述字符串),只能靠 claude CLI 侧预授权抑制控制请求。**直接决定角色 bot 的 Read/Grep/WebSearch 能不能用**;若不成立,dontAsk 等于让角色 bot 无工具可用,必须回退 `default` + allowed_tools 组合。**W1 遗留的头号阻塞项。**
+2. 🔴 **本机 claude CLI 是否接受 `--permission-mode dontAsk`**。上游无任何 CLI 能力探测、版本门控或失败重试,flag 原样拼进命令行——能否被接受完全取决于本机 claude 版本。
+3. 🟠 **我们自建 plist 下各路信号落在哪个文件**。`Error loading config` 走 stderr,而 `allow_from is not set` 等 slog 输出在未设 `CC_LOG_FILE` 时走 **stdout**,lark SDK 另直写进程 stdout。决定 CI 烟测该 grep 哪个文件。
+4. 🟠 **api.sock 探针的实际行为**(路径/空会话返回码/agent 忙时是否阻塞成假死)——⑤ 的回退方案依赖它。
+5. 🟠 **空闲实例的真实静默时长**:cc-connect 自身判定为零输出,但 lark SDK 在 Info 级是否周期打点无法从上游源码判定(上游 daemon 把 stdout 指 `/dev/null` 所以从未暴露,而我们的 plist 指真实文件)。**实测前一律按「不可用」处理。**
+6. 🟡 **语言回写链路的端到端确认**:真跑 + 发一条中文消息,确认改成 `"zh"` 后钩子确实不注册。
+7. 🟡 **fast-fail 真实耗时**:源码判定亚秒,实测确认 5 秒窗口余量。
+
+**烟测 oracle 的三条修正**(③ 的操作性结论,写进 §8.1 执行时必须遵守):
+
+- **`exit 1` ≠ config 非法**:实例锁在 `config.Load` **之前**,锁名由 config 路径推导。已有 daemon 在跑同一份 config 时必然 exit 1 而 config 根本没被解析 → 烟测必须拷到独立临时目录跑;**绝不能用 `--force`**(会 kill 掉生产 daemon)。
+- **关键字须同时抓 stdout 与 stderr**:只抓 stderr 会漏掉 `allow_from is not set` 这条暴露白名单形态坑的唯一运行时信号。
+- **更优 oracle 是 `cc-connect doctor user-isolation --config <path>`**:直接调 `config.Load`,不抢实例锁、无网络。注意其输出走 stderr、`exit 2` 表示用法错误,且 **doctor exit 0 ≠ 进程起得来**(不覆盖 claude 不在 PATH、空 app_secret 等 config 之后的硬失败点)。
+- 另注:启动时会异步对 gitee/GitHub 发版本检查 HTTP(3s timeout,非阻塞)——对「烟测机不得出网」的约束是实打实的。
 
 ## 11. 排期(4 + 2 周)
 
