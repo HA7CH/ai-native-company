@@ -13,7 +13,7 @@ description: 新成员接入公司共享 vault——一行命令连上,自检连
 
 ## 步骤
 
-1. **要两样东西**:管理员给的服务地址(`https://<worker>/mcp`)和 token。执行:
+1. **要两样东西**:管理员给的服务地址(`https://<worker>`)和 token。先接控制面:
 
    ```bash
    claude mcp add --transport http vault https://<worker>/mcp --header "Authorization: Bearer <token>"
@@ -21,10 +21,30 @@ description: 新成员接入公司共享 vault——一行命令连上,自检连
 
 2. **自检**:调用 `vault_read("CLAUDE.md")`。能读到根路由 = 接入成功。把路由表里「你最可能用到的 2-3 行」念给用户听。
 
-3. **教三个动作**(以后日常就这三样):
-   - 问公司的事 → 我会先按 CLAUDE.md 路由表定位文件再回答;
-   - 「搜一下 X」 → vault_search;
-   - 「把这个入库」 → 走 anc-ingest(没装就提示用户装)。
+3. **拉本地镜像**(强烈建议,不是可选项):
+
+   ```bash
+   anc init https://<worker> <token> --name <公司名>
+   anc pull
+   ```
+
+   只同步结构化 markdown 与 OCR 文本(通常几百 KB),GB 级原件不动。同步完之后**优先用
+   `Grep`/`Read` 直接读镜像目录**(`anc where` 打印路径),比 `vault_search` 快且不会截断——
+   服务端搜索有展示配额,结果永远只是样本。没装 CLI 时才退回 `vault_search`。
+
+   每次开始干活前先 `anc pull` 一次拿最新。
+
+4. **教四个动作**(以后日常就这些):
+   - 问公司的事 → 我会先按 CLAUDE.md 路由表定位文件,在本地镜像里 Grep/Read 后回答;
+   - 「搜一下 X」 → 本地 `rg`(没镜像时用 vault_search,并说明结果是样本);
+   - 「把这个入库」 → 走 anc-ingest(没装就提示用户装);
+   - 「我要看那份 PDF / 核对原件」 → `vault_original` 拿位置,`anc open <路径>` 单取那一份。
+     **绝不尝试把原件 base64 读进对话**——体量上物理不可能。
+
+5. **改文件的纪律**:要改已有文件,先 `vault_read` 拿 etag,写回时作为 `base_etag` 传给
+   `vault_write`;不传会被拒。这是防止你抹掉别人在你读完之后做的改动。用 CLI 的话
+   `anc push` 会自动带;`anc pull` 报冲突时,对方版本在 `<文件>.remote`,合并后
+   `anc push --resolved` 提交。
 
 4. **同步技能名片**:`vault_list("skills/")` 列出公司技能库;对每个本地 `~/.claude/skills/` 还没有的技能 `<name>`,按以下规则生成,**任何一步不满足就跳过该技能并向用户说明原因与修法,绝不写残缺名片**:
    - `vault_read("skills/<name>/SKILL.md")`:未找到/401/其它错误 → 跳过,报告「<name> 正文读取失败:<原因>」(未找到 → 请管理员跑 onboard 上载;401 → 重新接入);
