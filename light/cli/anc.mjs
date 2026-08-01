@@ -188,6 +188,7 @@ async function cmdPull(argv) {
 
   const toDownload = [];
   const conflicts = [];
+  const failedDownloads = new Set();
 
   for (const e of remote.entries) {
     const l = localMap.get(e.path);
@@ -225,7 +226,12 @@ async function cmdPull(argv) {
     if (r && r.etag === l.etag && (await hasLocalEdit(root, l.path, l))) localOnlyEdits.push(l.path);
   }
 
-  const toDelete = local.entries.filter((l) => !remoteMap.has(l.path)).map((l) => l.path);
+  const toDelete = [];
+  const removedWithLocalEdits = [];
+  for (const l of local.entries.filter((entry) => !remoteMap.has(entry.path))) {
+    if (await hasLocalEdit(root, l.path, l)) removedWithLocalEdits.push(l);
+    else toDelete.push(l.path);
+  }
 
   if (!toDownload.length && !toDelete.length && !conflicts.length) {
     console.log(green("✓ 无改动"));
@@ -240,6 +246,7 @@ async function cmdPull(argv) {
     const r = await api(cfg, `/raw/${e.path.split("/").map(encodeURIComponent).join("/")}`);
     if (!r.ok) {
       console.error(red(`  ✗ ${e.path} HTTP ${r.status}`));
+      failedDownloads.add(e.path);
       return;
     }
     const buf = Buffer.from(await r.arrayBuffer());
@@ -261,21 +268,43 @@ async function cmdPull(argv) {
   }
 
   // 记状态。冲突项保留**本地**的旧 etag,这样下次 pull 还会再提示,直到人处理掉
-  const newEntries = remote.entries.map((e) => {
+  const newEntries = remote.entries.flatMap((e) => {
     if (conflicts.some((c) => c.path === e.path)) {
       const l = localMap.get(e.path);
-      return { ...l };
+      return l ? [{ ...l }] : [];
     }
-    return e;
+    if (failedDownloads.has(e.path)) {
+      const l = localMap.get(e.path);
+      return l ? [{ ...l }] : [];
+    }
+    return [e];
   });
+  newEntries.push(...removedWithLocalEdits);
   await fs.mkdir(stateDir(cfg), { recursive: true });
   await fs.writeFile(
     manifestPath(cfg),
-    JSON.stringify({ etag: conflicts.length ? null : remoteEtag, entries: newEntries }, null, 2) + "\n",
+    JSON.stringify(
+      {
+        etag: conflicts.length || failedDownloads.size || removedWithLocalEdits.length ? null : remoteEtag,
+        entries: newEntries,
+      },
+      null,
+      2,
+    ) + "\n",
   );
 
   if (downloaded) console.log(green(`✓ 更新 ${downloaded} 个文件 (${humanBytes(bytes)})`));
   if (toDelete.length) console.log(green(`✓ 删除 ${toDelete.length} 个远端已移除的文件`));
+  if (failedDownloads.size) {
+    console.log(red(`\n⚠️ ${failedDownloads.size} 个文件下载失败，未标记为已同步：`));
+    for (const p of failedDownloads) console.log(`    ${p}`);
+    process.exitCode = 1;
+  }
+  if (removedWithLocalEdits.length) {
+    console.log(yellow(`\n⚠️ ${removedWithLocalEdits.length} 个文件已从远端删除，但你的本地版本有未回传修改，已保留：`));
+    for (const e of removedWithLocalEdits) console.log(`    ${e.path}`);
+    console.log(dim("  确认后可重新 push，或手动删除本地文件。"));
+  }
   if (localOnlyEdits.length) {
     console.log(yellow(`\n● 你本地改过但还没回传的 ${localOnlyEdits.length} 个文件:`));
     for (const p of localOnlyEdits.slice(0, 10)) console.log(`    ${p}`);

@@ -13,6 +13,8 @@
  */
 
 import fs from "node:fs/promises";
+import crypto from "node:crypto";
+import { createServer } from "node:http";
 import path from "node:path";
 import os from "node:os";
 import { execFile } from "node:child_process";
@@ -126,6 +128,59 @@ ok(
   "★ push 之后紧接着 pull,本地后续改动不会被当「远端新增」冲掉",
   /本地又加的一行/.test(await fs.readFile(P2_ABS, "utf8")),
 );
+
+// —— 单文件下载失败不能污染 manifest,否则下次 pull 会误判为已同步而永不重试
+const RETRY = `${NS}/交付/需重试.md`;
+await tool("vault_write", { path: RETRY, content: "这份必须下载\n", author: "乙" });
+const retryUrl = `/raw/${RETRY.split("/").map(encodeURIComponent).join("/")}`;
+const proxy = createServer(async (req, res) => {
+  if (req.url === retryUrl) {
+    res.writeHead(503).end("injected download failure\n");
+    return;
+  }
+  const upstream = await fetch(`${ENDPOINT}${req.url}`, {
+    method: req.method,
+    headers: { Authorization: `Bearer ${TOKEN}` },
+  });
+  res.writeHead(upstream.status, Object.fromEntries(upstream.headers.entries()));
+  res.end(Buffer.from(await upstream.arrayBuffer()));
+});
+await new Promise((resolve) => proxy.listen(0, "127.0.0.1", resolve));
+const proxyAddress = proxy.address();
+const proxyEndpoint = `http://127.0.0.1:${proxyAddress.port}`;
+const configPath = path.join(HOME, ".anc", "config.json");
+const config = JSON.parse(await fs.readFile(configPath, "utf8"));
+await fs.writeFile(configPath, JSON.stringify({ ...config, endpoint: proxyEndpoint }, null, 2) + "\n");
+
+const failedPull = await anc("pull", "--force");
+ok("★ 单文件下载失败时 pull 返回非零", failedPull.code !== 0, failedPull.out);
+ok("下载失败的文件没有伪装成本地已存在", !(await fs.stat(path.join(ROOT, RETRY)).catch(() => null)));
+
+await fs.writeFile(configPath, JSON.stringify({ ...config, endpoint: ENDPOINT }, null, 2) + "\n");
+await new Promise((resolve, reject) => proxy.close((err) => (err ? reject(err) : resolve())));
+const retriedPull = await anc("pull", "--force");
+ok("★ 下次 pull 会重试并补齐上次失败的文件", /\u8fd9\u4efd\u5fc5\u987b\u4e0b\u8f7d/.test(await fs.readFile(path.join(ROOT, RETRY), "utf8")), retriedPull.out);
+
+// —— 远端删除时,本地已编辑的版本必须保留
+const REMOVED = `${NS}/交付/远端已删.md`;
+const removedAbs = path.join(ROOT, REMOVED);
+const baseline = Buffer.from("旧版\n");
+await fs.writeFile(removedAbs, baseline);
+const manifestFile = path.join(ROOT, ".anc", "manifest.json");
+const manifest = JSON.parse(await fs.readFile(manifestFile, "utf8"));
+manifest.entries.push({
+  path: REMOVED,
+  etag: "deleted-remotely",
+  size: baseline.length,
+  localHash: crypto.createHash("sha256").update(baseline).digest("hex"),
+});
+manifest.etag = null;
+await fs.writeFile(manifestFile, JSON.stringify(manifest, null, 2) + "\n");
+await fs.writeFile(removedAbs, "我的本地未回传修改\n");
+
+const deletionPull = await anc("pull", "--force");
+ok("★ 远端删除不会顺带删掉本地未回传修改", /本地未回传修改/.test(await fs.readFile(removedAbs, "utf8")), deletionPull.out);
+ok("远端删除冲突被明确报告", /已从远端删除/.test(deletionPull.out), deletionPull.out);
 
 await fs.rm(HOME, { recursive: true, force: true });
 console.log(`\n${"─".repeat(50)}\n\x1b[1m${pass} 通过, ${fail} 失败\x1b[0m`);
