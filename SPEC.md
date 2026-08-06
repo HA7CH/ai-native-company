@@ -166,6 +166,14 @@ type HarnessEvent =
 - config 修改约定:时间戳备份 → 原子写(temp + rename)→ 结构校验(行数/项目数/secret 完整性)→ kickstart → 功能级探针验证,失败即还原。
 - 重启自愈需要开自动登录(GUI 会话才有 keychain)——onboarding 里作为明确的决策项呈现给用户。
 
+### 3.4 Computer Worker:可选的 GUI 执行面
+
+部分业务系统只有浏览器或桌面 GUI,ANC 为此保留 provider-neutral 的 **Computer Worker** 插槽。它不是第三种 harness:Harness 仍负责理解、检索与规划,Computer Worker 只接收结构化任务并返回 artifact 与审计事件。Claude、Codex 或其他 computer-capable agent 均通过同一能力接口接入,核心层不依赖厂商的坐标、截图循环或模型协议。
+
+控制面(vault / gateway / router / audit)可无图形运行;执行面按需使用带独立图形会话或虚拟显示器的 worker。默认按能力共享 worker 池,不把「一人一 bot」等同于「一人一常驻桌面」。API/MCP 优先、CLI 次之、Computer 仅作 GUI-only 兜底;外发、删除、购买、发布和权限变更必须过人审。
+
+该能力为 experimental,不阻塞 M1-M5。接口草案、隔离边界与渐进验证门见 [docs/COMPUTER-WORKERS.md](./docs/COMPUTER-WORKERS.md)。
+
 ---
 
 ## 4. Persona 系统

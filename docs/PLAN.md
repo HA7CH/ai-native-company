@@ -49,6 +49,16 @@
 - [ ] role 模板库社区化(贡献指南、更多行业角色包)
 - [ ] 跨公司 skill 分发的安全设计(签名 + 扫描 + pin,见 SPEC §5)——仅设计,是否实施看需求
 
+## Experimental — Computer Worker 执行面(不阻塞 M1-M5)
+
+- [ ] 单 worker spike:由 Harness 生成结构化任务,Computer adapter 只回收 artifact 与审计事件
+- [ ] provider-neutral contract:能力声明、健康检查、超时/取消、`observe|draft|commit` 策略
+- [ ] 虚拟桌面验证:独立 OS/用户会话、staging 目录、凭据隔离、并发资源曲线
+- [ ] 安全门:高风险动作人审、提示注入回放、失败不静默提权
+- [ ] 至少两个不同厂商/实现通过 contract test 后,再决定是否进入正式里程碑
+
+设计见 [COMPUTER-WORKERS.md](./COMPUTER-WORKERS.md)。
+
 ---
 
 ## 运营节奏
