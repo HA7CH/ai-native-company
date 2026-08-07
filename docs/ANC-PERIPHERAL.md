@@ -154,7 +154,7 @@ Pipeline 阶段可按部署能力增减,但阶段产物必须可追踪:
 
 ## 7. YoooClaw 作为首个接入实现
 
-[YoooClaw CLI](https://developer.yoooclaw.ai/cli/)是目前更接近 ANC 软件接入层的候选:Go 单二进制 daemon、macOS/Linux ARM64/x64 支持、录音状态事件、本地文件、profile、多 api-key/`clientLabel`、结构化 JSON/NDJSON 输出,并可安装 Claude Code/Codex skill。
+[YoooClaw CLI](https://developer.yoooclaw.ai/cli/)是目前更接近 ANC 软件接入层的候选:Go 单二进制 daemon、macOS/Linux ARM64/x64 支持、录音状态事件、本地文件、profile、多 API key/`clientLabel`、结构化 JSON/NDJSON 输出,并可安装 Claude Code/Codex skill。
 
 推荐用法是 adapter,不是把 ANC 核心绑定到其托管 Relay:
 
