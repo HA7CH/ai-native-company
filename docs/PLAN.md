@@ -49,6 +49,17 @@
 - [ ] role 模板库社区化(贡献指南、更多行业角色包)
 - [ ] 跨公司 skill 分发的安全设计(签名 + 扫描 + pin,见 SPEC §5)——仅设计,是否实施看需求
 
+## Experimental — ANC Peripheral 录音外设(不阻塞 M1-M5)
+
+- [ ] software-only spike:手机录音 → Capture Session → Pipeline → 会话/知识/动作/档案/丢弃五类路由
+- [ ] ANC Capture Protocol:设备身份、音频块、ACK、断点续传、会话绑定与保留策略
+- [ ] YoooClaw adapter spike:`proxied` ingress、录音状态、profile/设备映射与 egress callback
+- [ ] 磁吸录音卡原型:本地录音、独立电池、BLE 同步、物理键与强制录音指示
+- [ ] Seeed Studio/其他 ODM 可行性:麦克风、低功耗、结构、样机、认证和量产边界
+- [ ] 安全门:设备吊销、加密/重放保护、参与者授权、知识/动作人审、原始音频删除
+
+设计见 [ANC-PERIPHERAL.md](./ANC-PERIPHERAL.md)。只有 software-only 与开发板阶段验证通过后,才决定正式里程碑和量产路线。
+
 ---
 
 ## 运营节奏

@@ -292,3 +292,13 @@ anc doctor               # 环境诊断(keychain/PATH/GUI 会话/版本 pin)
 2. 多公司单机(一台 mini 跑两家公司)是否支持——v1 不支持,一机一公司。
 3. bot 间协作(群里互 @ 接力)——cc-connect 1.5 的 mention_map/inter-bot relay 落地后评估,v1 不做。
 4. 心跳/主动性(HEARTBEAT.md 模式)——多 bot 场景心跳成本 ×N,需全局错峰与预算闸,放 M4 评估。
+
+---
+
+## 13. Experimental:ANC Peripheral 现实输入层
+
+ANC 为与 `Member → Bot → Agent Session` 绑定的物理输入设备保留扩展方向。第一种形态是录音外设:设备只负责可靠收音、缓存与连接,不运行模型或 agent loop;原始输入必须经过隔离的 Capture Pipeline,再路由为临时会话 context、知识候选、动作候选、档案或丢弃结果。
+
+硬件与连接实现均可替换:Seeed Studio 等作为硬件工程/量产候选,YoooClaw 可作为首个手机/Relay/daemon adapter;ANC 自己持有 Capture Protocol、组织/会话绑定、权限、处理与路由语义。MCP 位于 Pipeline 之后作为 Agent 适配面,不承担底层连续音频传输。
+
+完整提案、硬件路线、安全边界和渐进验证见 [docs/ANC-PERIPHERAL.md](./docs/ANC-PERIPHERAL.md)。该方向不阻塞 M1-M5。
