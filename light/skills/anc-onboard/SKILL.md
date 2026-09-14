@@ -46,6 +46,16 @@ claude mcp add --transport http vault https://<worker>/mcp --header "Authorizati
 5. **团队有谁,各管什么?**(姓名/角色/关注面)
 6. **哪些事实经常变?**(名单、价格表、排期——这些要进 canonical 单点文件)
 
+然后建**问题模型**(SPEC §2.5;勘探的本质不是收集信息,是建立问题模型)。五问,答不出就写 `TBC`,全部标「假设」:
+
+7. **核心瓶颈**:制约你们业务目标的关键环节是哪一个?(追问:如果三个月后什么都没变,最先出问题的是哪里)
+8. **因果链**:它是技术原因、流程原因、外部约束还是内部能力不足?(逐条列)
+9. **量化影响**:它让你们损失了什么?时间、收入、满意度?现在能拿到哪个数字?(区分实测 / 系统记录 / 估算)
+10. **相关方地图**:谁被它影响?谁有动力推动解决?谁会阻碍?
+11. **已有尝试**:之前试过什么?为什么没成?
+
+问完复述一遍「我理解你们最堵的是 X,因为 Y,每周大约损失 Z」,让创始人纠正;这句话就是第一批 skill / bot 的立项依据。
+
 ### 2. 设计目录(给用户看,确认后再写)
 
 根据回答设计 3-6 个业务目录(用问题 2 的答案命名,如 `orders/` `clients/` `cases/`),外加固定骨架:
@@ -56,6 +66,8 @@ CONTRIBUTING.md      # 入库规范(见步骤 3)
 company/profile.md   # 公司简介(访谈产物)
 company/glossary.md  # 术语表
 company/team.md      # 成员与角色(canonical:人员信息只在这一份)
+company/problem-model.md  # 问题模型(canonical:五要素 + 状态 + 证据,诊断层)
+collab/              # 协作规范 + 任务看板 + 决策记录 + 交接模板(多人多 agent 共用一个库)
 roles/<role>.md      # 每角色一份:职责、常见问题、口吻建议
 <domain>/CLAUDE.md   # 每业务目录一份:本目录放什么、怎么命名
 <domain>/_originals/ # 原件区(PDF 等,结构化 markdown 用 source_file 指回)
@@ -66,6 +78,7 @@ templates/           # 数据录入模板(复制→填→写入)
 
 - **根 CLAUDE.md** 必须包含:① 公司一句话简介;② 「问题类型 → 文件」路由表(按问题 2 生成);③ 三条纪律:先按表定位再搜索、查不到就说「尚未入库」不编造、易变事实只在 canonical 文件维护。
 - **CONTRIBUTING.md**:frontmatter 规范(`title` / `source_file` / `updated`)、目录与命名约定、「原件进 `_originals/`,结构化 markdown 指回原件」。
+- **问题模型与协作模板上载**:把本技能目录下 `vault-templates/company/problem-model.md` 按访谈第 7-11 问填好(答不出的要素写 `TBC`,状态一律「假设」,第 6 节列出立项候选)写入 `company/problem-model.md`;`vault-templates/collab/` 四个文件原样写入 `collab/`(公司若已有自己的协作规范,先读后并,不覆盖)。
 - **技能正文上载**:把本技能目录(`~/.claude/skills/anc-onboard/`)下 `vault-skills/` 里的每个 `<name>.md`,按需结合访谈结果做行业定制(尤其入库规范相关表述),写入 vault 的 `skills/<name>/SKILL.md`。**硬约定(anc-join 生成名片依赖)**:正文第一个标题下方必须保留两行——`触发词:…` 与 `简介:…`,各自单行、非空、≤200 字;上载前逐个自检,缺了就补。技能正文从此以 vault 为唯一真相:后续改技能 = 改 vault,全员即时生效。
 - 其余文件按访谈内容填,没问到的字段写 `TBC`。
 
@@ -73,7 +86,8 @@ templates/           # 数据录入模板(复制→填→写入)
 
 1. 每个成员的接入命令(同步骤 0 的一行命令)+ 建议他们装 `anc-join` skill(join 会自动从 vault 同步技能名片,后续公司技能更新无需任何人手动升级)。
 2. 「把手头资料发给我,说『入库』」→ 走 anc-ingest。
-3. 提醒:VAULT_TOKEN 就是公司数据的钥匙,只在私密渠道分发。
+3. 问题模型里的每个「假设」都需要证据:下一步是逐人访谈(托管形态由访谈 bot 采集,轻形态由成员把访谈纪要入库并在 `company/problem-model.md` 回填证据链接);每个里程碑复盘先看哪些假设变成了「已验证 / 已推翻」。
+4. 提醒:VAULT_TOKEN 就是公司数据的钥匙,只在私密渠道分发。
 
 ## 失败排查
 

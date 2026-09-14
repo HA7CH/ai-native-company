@@ -1,6 +1,6 @@
 # 实施计划(PLAN)
 
-版本:0.1(2026-07-24)。里程碑按「每步都有真实用户在用」排序:reference deployment(Climax Racing)始终是第一个用户,每个里程碑先在它身上落地,再泛化。
+版本:0.1(2026-07-24;2026-09-14 并入第二个 reference deployment)。里程碑按「每步都有真实用户在用」排序:reference deployment(Climax Racing)始终是第一个用户,每个里程碑先在它身上落地,再泛化。第二个 reference deployment(制造企业四部门试点,Linux + 全员 Windows + 第三方模型)提供对照样本,其 lessons 见 [LESSONS-MANUFACTURING-PILOT.md](./LESSONS-MANUFACTURING-PILOT.md)。
 
 ---
 
@@ -23,7 +23,8 @@
 
 ## M2 — 对话式 onboarding + 自动入库
 
-- [ ] **onboarding skill**(SPEC §6 五阶段):访谈(语音友好)→ 名单 → 初始资料 → 装机 checklist(断点续走)→ 验证 + 自我介绍
+- [ ] **onboarding skill**(SPEC §6):访谈(语音友好)→ **问题模型**(五要素,全标假设)→ 名单 → 初始资料 → 装机 checklist(断点续走)→ 验证 + 自我介绍;light 版已先行加入问题模型访谈与 vault-templates
+- [ ] **员工级访谈 bot**(SPEC §2.5 采集器):逐人采集工作事实回填问题模型;状态用 SQLite 事务、规则版本冻结、报告不评绩效(SPEC §2.3/§5)
 - [ ] **ingest 管线产品化**:inbox 目录约定、watcher sidecar、结构化入库(schema 校验 + diff 复核门,不 bypass)、publish、摘要通知
 - [ ] `anc audit [--fix]` 第一版(默认值、密钥权限、白名单、bypass 检查)
 - [ ] 验收:一个非 Climax 的真实小团队(找一家设计室/贸易行/俱乐部)完整走通 onboarding 并留存使用
@@ -31,7 +32,10 @@
 ## M3 — 第二平台与第二 harness
 
 - [ ] 钉钉(Stream Mode)、企业微信(智能机器人长连接)接入:主要是渲染器支持 + 逐平台建应用 checklist + 卡片降级策略
-- [ ] **Codex CLI 第二后端**:Harness 接口落地(runTurn/resume/事件流),AGENTS.md persona 注入,回归两 harness 行为一致性
+- [ ] **Codex CLI 第二后端**:Harness 接口落地(runTurn/resume/事件流),AGENTS.md persona 注入,回归两 harness 行为一致性(试点已有 Codex 生产实证,见 LESSONS §1)
+- [ ] **第三方模型边界代理接入渲染管线**:company.fallback_provider 非官方端点时,渲染器自动拉起 `tools/harness-proxy/` 并把 base_url 指向 loopback(SPEC §3.2)
+- [ ] **Linux/systemd installer 后端**(SPEC §3.3):与 launchd 三件套同构 + `.path` 配置监听 + bubblewrap 沙箱
+- [ ] **批量 provisioning**(SPEC 开放问题 5):是否以 `anc provision` 交付,随 #8 裁决
 - [ ] per-member credential 支持(每人绑自己的订阅)
 - [ ] 验收:同一 org 定义,切平台/切 harness 只改配置一行
 
@@ -39,6 +43,8 @@
 
 - [ ] watchdog / 防假绿探针 / token & 使用日报 通用化(去 Climax 专有逻辑)
 - [ ] **triage 引擎**:聊天问题挖掘 → 聚类去重 → 频率信号 → 自动开 issue → 人只把关(治「反馈闭环后半段全手工」的生产头号痛点)
+- [ ] **对话层 / 任务层产品化**(SPEC §4.3):后台任务 worker、按发送者隔离、`waiting_input` / `needs_review` 状态机、回传策略层
+- [ ] **cc-connect 上游 PR:卡片回调转发**(`card_action_webhook`,SPEC §3.1)
 - [ ] skill merge 后自动部署 + 漂移检测(merged = live)
 - [ ] 《整机重建 runbook》+ `anc rebuild`(config 可 git 重建,单机风险对策)
 - [ ] 心跳/主动性评估(HEARTBEAT.md 模式,多 bot 错峰与预算闸)

@@ -1,7 +1,7 @@
 # @ha7ch/ai-native-company — 架构规范(SPEC)
 
 版本:0.1(2026-07-24,立项稿)
-状态:Draft。基于 Climax Racing reference deployment 的生产经验(markdown vault 13+ 周、6-bot 矩阵 8 周、现行 gateway 形态 5 周)+ 六路调研(见 [docs/RESEARCH.md](./docs/RESEARCH.md))。
+状态:Draft。基于 Climax Racing reference deployment 的生产经验(markdown vault 13+ 周、6-bot 矩阵 8 周、现行 gateway 形态 5 周)+ 六路调研(见 [docs/RESEARCH.md](./docs/RESEARCH.md));2026-09 起并入第二个 reference deployment(制造企业四部门试点,Linux 服务器 + 全员 Windows 个人 agent + 第三方模型,见 [docs/LESSONS-MANUFACTURING-PILOT.md](./docs/LESSONS-MANUFACTURING-PILOT.md))的裁决,下文以「试点」指代。
 
 ---
 
@@ -79,6 +79,8 @@ company-vault/
 
 **复杂数据升级路径**:数据量大到 grep 不动时,升级为「SQLite 做索引、markdown 仍是真相源」——本地增量索引(哈希变更检测),暴露 `search`(语义/全文)+ `get`(精确读文件行区间)两个工具。OpenClaw 的 memory 系统(社区已拆出 memsearch)验证了此路径。**永远不把真相源迁进数据库**;数据库可随时重建。
 
+**状态层的反向裁决(试点)**:上面这条只针对**知识层**。bot 承载的**多轮工作流状态**(一场跨几天的访谈的会话状态、线索账本、出站消息 outbox)正相反:SQLite 事务是真相,「完成」状态与「已完成」出站消息同一事务提交,常驻 outbox worker 重试未发送消息;个人 / 部门 markdown 都是可重建投影(提供 `reproject`)。一句话:**知识用文件,状态用事务**。投影文件仍进 vault,供其它 bot 读。
+
 ### 2.4 写路径:inbox 自动结构化入库
 
 ```
@@ -91,6 +93,20 @@ IM 里发文件/图片 → gateway 捕获 → 落 inbox/pending/ + .meta.txt(谁
 ```
 
 安全分层(防注入的关键设计):**角色 bot 只搬运、不入库、不执行文件内指令**;结构化/入库/commit 全归 ingest 管线(独立进程、独立 prompt、可加 schema 校验与 diff 复核门)。
+
+### 2.5 问题模型:vault 的诊断层
+
+onboarding 不只是建库。试点把 FDE 勘探里的「问题模型」做进了 vault:`company/problem-model.md` 是 canonical 文件,对「业务哪里堵了」做结构化描述,五个要素各带 `状态: 假设 / 已验证 / 已推翻` 与证据链接:
+
+| 要素 | 回答的问题 |
+|---|---|
+| 核心瓶颈 | 制约业务目标达成的关键环节是什么 |
+| 因果链 | 技术原因还是流程原因,外部约束还是内部能力不足 |
+| 量化影响 | 损失了什么(时间 / 收入 / 满意度),能否度量 |
+| 相关方地图 | 谁受影响、谁有动力推动、谁会阻碍 |
+| 已有尝试 | 试过什么方案,为什么失败 |
+
+它与架构的三个结合点:① **skill 的种子**——P6 说 skill 从事故里长出来,诊断期还没有事故,问题模型就是第一批 skill / bot 的立项依据(每个立项条目回指一个要素);② **员工级访谈 bot 是它的采集器**——创始人访谈给假设,逐人访谈给证据,访谈报告只记工作事实、不生成绩效或排名;③ **复盘先验模型再谈交付**——每个里程碑先看哪些「假设」变成「已验证 / 已推翻」,推翻的要素改 vault、不改 persona。模板见 `light/skills/anc-onboard/vault-templates/company/problem-model.md`。
 
 ---
 
@@ -112,7 +128,7 @@ IM 里发文件/图片 → gateway 捕获 → 落 inbox/pending/ + .meta.txt(谁
 - cc-connect(MIT,Go 单二进制,14.3k stars,143 contributors):13+ IM 平台(飞书/钉钉/企微/微信个人号/QQ/Telegram/Slack/Discord/Matrix…)× 12+ agent 后端(claudecode/codex/opencode/ACP…)。其 `[[projects]]` 配置模型与「一人一 bot」一一同构,我们的 6-bot 生产形态就是上游一等公民。
 - **pin 版本**,升级前过回归清单(已知雷:#1562 同实例多飞书 app 共享 WebSocket 丢消息;1.4.0 重构 agent 选项字段)。
 - 定义薄的 `GatewayProvider` 抽象(v1 只有 cc-connect 实现),保留未来接 Claude Code Channels 官方插件 / OpenACP 的插槽;cc-connect 死亡或改 license 时 MIT 允许 hard fork(灾备预案,不是计划)。
-- **上游缺口做进本库约定层**,同时逐个提上游 PR:上下文阈值治理(上游 #1111 deferred)、群文件捕获 sidecar(#1560)、launchd 修法(#752)、卡片降级时走平台官方 API 手搓发送、claudecode 任意 flag 透传(`--add-dir` 等,上游无此机制)、provider 额度触顶自动兜底(上游仅手动 `/provider switch`)。
+- **上游缺口做进本库约定层**,同时逐个提上游 PR:上下文阈值治理(上游 #1111 deferred)、群文件捕获 sidecar(#1560)、launchd 修法(#752)、卡片降级时走平台官方 API 手搓发送、claudecode 任意 flag 透传(`--add-dir` 等,上游无此机制)、provider 额度触顶自动兜底(上游仅手动 `/provider switch`);试点补三条:**交互卡片回调转发**(卡片按钮 / 量表的回调在 gateway 内部消费,业务进程拿不到;试点以补丁按 action 前缀 POST 到本机 HTTP 服务,可泛化为 `card_action_webhook` 配置项上游)、**工具轮次叙述不可隐藏**(`display.mode = "quiet"` 关掉的是工具消息,关不掉含 tool_use 轮次里的「让我先查一下」,见 §3.2 边界代理)、**面向员工的工作流 bot 需要 `reset_on_idle_mins = 0` 与 `filter_external_sessions = false`**(访谈跨天、服务重启后必须能续接,渲染器不得把 idle 重置写成常量)。
 
 平台接入优先级:
 
@@ -149,22 +165,33 @@ type HarnessEvent =
   | { type: "result"; sessionId: string; usage: { input: number; output: number; cached?: number }; costUsd?: number };
 ```
 
-- **Claude Code 一等公民**(能力超集:token 级流式、`--input-format stream-json` 常驻会话、原生 auto-compact、权限六档);**Codex CLI 第二后端**(回合制 `exec` + `resume`,验证抽象层健壮性,也是单一厂商政策风险的对冲)。
+- **Claude Code 一等公民**(能力超集:token 级流式、`--input-format stream-json` 常驻会话、原生 auto-compact、权限六档);**Codex CLI 第二后端**(回合制 `exec` + `resume`,验证抽象层健壮性,也是单一厂商政策风险的对冲)。试点实证:第一版员工面向 bot 就跑在 Codex CLI 上(Windows 本机,经 cc-connect 飞书长连接),后切换到 Claude Code + 第三方端点——双 harness 是已经发生的切换,不是设想。
 - 进程模型默认「每回合一进程 + resume」(两后端通吃、崩溃隔离);Claude 可选升级为常驻进程池(低延迟 + auto-compact)。
 - **上下文治理做在 harness 层之上**:超阈值先压缩再续接(生产教训:headless `-p /compact` 是 no-op,只有持久会话才有真 compact)。
 - 权限:角色 bot 一律不授予 bypassPermissions,用 `dontAsk`/`auto` + 工具白名单(典型反模式:bypass + 访问白名单全开 = 提示注入即 RCE);devbot 才给 full。
 - 鉴权做成配置项而非硬编码:订阅 OAuth(默认)/ API key(fallback)。两家计费政策 2026 年都在动荡(Anthropic credit 池方案官宣暂停、Codex 与 web 共享 5h 窗),必须假设会变。
+- **第三方模型下 persona 注入不可靠(试点)**:走 Anthropic 兼容端点(如 DeepSeek)时,Claude Code 自带的 system prompt 携带「Claude Code」身份,非 Claude 模型倾向服从它而非 `append_system_prompt` 里的 persona——bot 自称 Claude Code、向员工罗列终端能力。裁决:第三方模型一律经 **harness 边界代理**(`tools/harness-proxy/`,loopback 监听、不持凭据)在 `/v1/messages` 整段替换 system,并在响应侧丢弃含 tool_use 轮次的叙述文本;官方 Claude 模型不需要。
+- **批量 provisioning 是第三条接入路径(试点)**:全员 Windows、零 agent 起步的公司,靠一条 PowerShell 离线安装 Codex、内网中转站按「姓名-部门」签发 key(同人跨机复用同一 key、设备绑定首次凭据、停用的 key 不自动重建)、导入本地端点切换器。它不是 light 也不是 PRO,是**制造 light 前提**的那一步;登记为开放问题 5。
 - **合规红线写死**:只驱动官方 CLI 本体;绝不提取 OAuth token 给第三方 SDK。为规避「多真人共享一个订阅」被厂商重新解释的风险,架构原生支持 **per-member credential**(每人绑自己的订阅)并推荐为默认——既合规最稳,又与一人一 bot 同构,成本还核算到人头。
 
-### 3.3 部署层:一台 Mac mini 的工程学
+### 3.3 部署层:一台常驻机的工程学
 
-生产 13 周沉淀的 macOS 硬知识,installer 必须内建:
+两个 reference deployment 分别跑在 Mac mini(launchd)与 Ubuntu 服务器(systemd user units)上。与 OS 无关的三件事:**要认证的进程必须跑在持有凭据的用户会话里、非交互 shell 的 PATH 必须显式写全、配置变更走「备份 → 原子写 → 校验 → 重启 → 探针 → 失败还原」**。installer 需要 launchd / systemd 两个后端,下面分列。
+
+**macOS(launchd)**,生产 13 周沉淀的硬知识,installer 必须内建:
 
 - **一切要认证的进程必须跑在 GUI(Aqua)会话的 launchd LaunchAgent 里**(`gui/<uid>`):Claude 订阅凭据在 login keychain,SSH 上下文里 claude/git 网络操作全废;plist 严禁 `SessionCreate`(会丢 keychain)。
 - 非交互 shell PATH 不含 node/claude,**每个 plist 显式写完整 PATH**。
 - 常驻集(installer 生成,名字按公司前缀):gateway(KeepAlive)、inbox-watcher(KeepAlive sidecar)、vault-sync(15min ff-only pull)、ingest(每日兜底)、watchdog(30min)。
 - config 修改约定:时间戳备份 → 原子写(temp + rename)→ 结构校验(行数/项目数/secret 完整性)→ kickstart → 功能级探针验证,失败即还原。
 - 重启自愈需要开自动登录(GUI 会话才有 keychain)——onboarding 里作为明确的决策项呈现给用户。
+
+**Linux(systemd user units,试点)**:
+
+- 全部单元装在 `systemctl --user`,`loginctl enable-linger <user>` 保证无登录会话也常驻;`Environment=HOME=...` 显式写,不依赖登录 shell。
+- 一个 `.path` 单元监听 harness 配置文件(如 `~/.claude/settings.json`)变化,触发 oneshot 重启 gateway——端点切换器改了配置就生效,不用人去 restart。
+- 常驻集与 macOS 同构:gateway、后台任务 worker、卡片回调服务、outbox worker 各一个 `Restart=always` 单元,`TimeoutStopSec` 显式给,便于优雅停机。
+- 后台任务 worker 用 bubblewrap 做文件隔离沙箱(只见任务工作区与只读技能库),这是 Linux 独有的便利,macOS 侧对应 M2 的沙箱方案。
 
 ---
 
@@ -192,6 +219,17 @@ roles/<role>/persona.md × members/<name>/persona.md(叠加)
 
 未来演化(M4+):参考 OpenClaw 把单文件拆 `SOUL.md`(人格)/ `AGENTS.md`(行为)/ `USER.md`(服务对象画像)。
 
+### 4.3 对话层与任务层(试点)
+
+七段式描述的是 bot 怎么**回话**;IM 里发起的**长任务**(写代码、生成文档、批量处理文件)需要第二层。生产验证的约定,全部有回归测试锁定:
+
+- bot 是「始终可用的对话层」;需要连续用文件工具或产生交付物的工作,建独立持久化后台任务后**立即恢复对话**,不占对话会话。
+- **对话层有硬性调用预算**:预计超过少量工具调用的请求先建任务再返回;同步回合 timeout ≤ 90 秒;不设 `--max-turns`(截断会吞掉最终文本)。
+- **技能库是流程登记表,不是能力白名单**:未命中专项技能但能用通用推理安全完成的事不得拒绝;带外部副作用的操作(部署、外发、系统管理)只能经明确配置了受控工具的专项技能执行。
+- **任务按发送者隔离**:每条消息先按发送者查其任务;恰有一个 `waiting_input` 且当前消息是在回答才续入;无关闲聊不劫持、不擅自结束;多个候选先用短编号确认;`needs_review`(执行器异常中断)只有任务所有者明确确认才重排队。
+- 后台 worker 跑在文件隔离沙箱;回传有策略层——普通任务摘要 + 产物发回原会话,敏感类任务只落内部目录。
+- 对外表达:不向用户展示模型、子 agent、队列、上下文余量、内部路径与任务状态。
+
 ---
 
 ## 5. Skill 系统
@@ -200,6 +238,7 @@ roles/<role>/persona.md × members/<name>/persona.md(叠加)
 - **三个结构约定**:置顶铁律段(不编造/TBC/查不到就明说)、「事实 → 绝对路径文件」数据源表、skill 间衔接显式声明(A skill 先调 B skill 取数)。
 - **部署**:vault `skills/` 为真相源 → `anc deploy skills` 同步到 `~/.claude/skills/`(幂等 rsync,非破坏);merge 后自动部署 + 漂移检测(生产痛点:最后一公里手动,merged ≠ live)。
 - **迭代闭环(本库的灵魂)**:使用/事故 → 聊天挖掘(每日分析对话,发现答错/新需求)→ 问题池 triage(聚类去重、频率信号)→ issue → devbot 实现 → review → merge → 自动部署 → eval 回归。目标:从「答错一次」到「校验 skill 上线」在一天内闭环。
+- **会话内规则冻结(试点)**:「改一次即时生效」对多轮工作流是事故源——一场跨几天的访谈,规则半途被改,前后口径不一致。路由策略与线索规格带 `version` / `approved_by` / `effective_at` / 内容 hash,每次工作流开始时冻结 `policy_version` 与 `rule_content_hash`,新规则只对新开的工作流生效。
 - **供应链安全**(用 OpenClaw 的事故付学费:ClawHub 12% skill 恶意率、SKILL.md 发木马):公司场景默认**只信 org 内部 registry(vault 里的 skills/)**;未来跨公司分发必须签名 + 静态扫描(含提示注入模式)+ 版本 pin + 安装前 diff 展示。
 
 ---
@@ -211,6 +250,8 @@ roles/<role>/persona.md × members/<name>/persona.md(叠加)
 ```
 阶段 1 访谈     「你们公司是做什么的?」→ 追问业务域、术语、数据类型
                 产出:company/profile.md、术语表、vault 目录设计稿
+阶段 1b 问题模型 「哪里堵了?」→ 核心瓶颈 / 因果链 / 量化影响 / 相关方 / 已有尝试(§2.5)
+                产出:company/problem-model.md(要素全标「假设」)+ 第一批 skill/bot 立项候选
 阶段 2 名单     要人员名单(口述/表格/照片都行)→ 每人:姓名、角色、IM 账号
                 产出:members/、roles/(从内置角色模板库匹配 + 定制)
 阶段 3 资料     「把手头的资料发我」(PDF/Excel/照片)→ 走 ingest 管线首跑
@@ -221,6 +262,8 @@ roles/<role>/persona.md × members/<name>/persona.md(叠加)
                 ③ 自动登录/防休眠决策
 阶段 5 验证     健康探针全绿 → 每人 IM 里收到自己的 bot 的自我介绍
                 → anc audit 安全体检(默认值检查、权限白名单、密钥文件权限)
+阶段 6 诊断期   员工级访谈 bot 逐人采集(只记工作事实,不评绩效)→ 回填问题模型证据
+                → 里程碑复盘先验模型(假设 → 已验证 / 已推翻)再谈交付
 ```
 
 关键设计:**「向导 + 体检」成对出现**(OpenClaw 的标杆经验);无法自动化的步骤(建应用、OAuth、自动登录)不假装能自动化,做成引导式 checklist,状态可断点续走。
@@ -234,6 +277,7 @@ roles/<role>/persona.md × members/<name>/persona.md(叠加)
 1. **Identity first(谁能说话)**:平台白名单(`allow_from`)默认关闭注册、陌生人走配对码;`admin_from` 独立管特权命令;devbot 仅创始人。
 2. **Scope next(能动什么)**:角色 bot = 空沙箱 cwd + 只读数据白名单 + `dontAsk`/工具白名单;ingest 独立进程不 bypass;devbot 才有 full,且 cwd 天然是 git(改坏可回滚)。
 3. **Model last(假设模型会被操纵)**:提示注入无模型级解(业界实测成功率 >79%),入站文件/网页内容按敌意处理——角色 bot 只搬运不执行;高危操作(exec/外发/部署)过 IM 按钮人审。
+4. **出站凭据检查(试点)**:任何 agent → IM 的结构化内容,发送前本机先做确定性凭据扫描(app secret / api key / bearer / cookie / 私钥 / 含密码连接串 / 各家 token 前缀),命中即替换后重扫,扫描器不可用则不发;只过滤凭据,不因为内容是代码而过滤。成员个人 agent 经 IM 与公司 bot 做 A2A 时(最小信封:`protocol` / `survey_id` / `message_id` / `reply_to` / `type` / `rule_version` / `payload`,靠 message_id 去重、survey_id 隔离),「完成」只允许服务端判定器发出,bot 对话层无权宣布。
 
 **默认值即安全策略**:绝不默认 0.0.0.0;secret 文件 600/目录 700;secret 永不进 git;bind loopback + 鉴权缺一不启动。`anc audit` 一键体检 + `--fix`。
 
@@ -283,6 +327,8 @@ anc doctor               # 环境诊断(keychain/PATH/GUI 会话/版本 pin)
 | 升级雷(#1562 多飞书 bot 丢消息等) | 中 | 升级回归清单进 CI;不追新版 |
 | 提示注入 → 部署机 RCE | 高 | §7 三层防线;角色 bot 一律不授予 bypass;人审门 |
 | 微信 iLink 协议无契约、扫码续命 | 低 | 标 experimental,永不做主通道 |
+| 第三方模型下 harness 身份压过 persona(试点实证) | 中 | 边界代理整段替换 system(§3.2);校验器要求第三方端点必须配代理 |
+| 员工面向 bot 被配成 bypass + `allow_from = "*"`(试点观察到的反模式) | 高 | §7 红线无例外;渲染器拒绝 `"*"`、校验器拒绝角色 bot bypass;后台任务进沙箱 |
 | Claude Code Channels / Cowork 向公司场景渗透 | 中 | 盯平台扩张;差异化四锚点;GatewayProvider 插槽可反向接入 |
 | 单机单点(机器/进程/网络/运维人) | 中 | watchdog + 主动告警;配置/数据全可 git 重建;《重建 runbook》为 M4 交付物 |
 
@@ -292,3 +338,5 @@ anc doctor               # 环境诊断(keychain/PATH/GUI 会话/版本 pin)
 2. 多公司单机(一台 mini 跑两家公司)是否支持——v1 不支持,一机一公司。
 3. bot 间协作(群里互 @ 接力)——cc-connect 1.5 的 mention_map/inter-bot relay 落地后评估,v1 不做。
 4. 心跳/主动性(HEARTBEAT.md 模式)——多 bot 场景心跳成本 ×N,需全局错峰与预算闸,放 M4 评估。
+5. **批量 provisioning 形态**(试点)——全员 Windows、零 agent 的公司如何一条命令装好个人 agent 并拿到自己的 key(内网中转站按「姓名-部门」签发、设备绑定、停用不自动重建)。它制造的是 light 的前提;是否进本库、以 `anc provision` 还是独立 skill 交付,与 #8 一并裁决。
+6. **成员个人 agent 与公司 bot 的 A2A 通道**(试点)——通道就是 IM 本身(个人 agent 以本人身份发消息),协议是最小信封(§7)。是否标准化为 vault 规范的一部分,M3 与 Codex 后端一起评估。

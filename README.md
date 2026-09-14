@@ -40,6 +40,8 @@
 
 reference deployment 仓库含车队真实数据,为私有;M1 起其 generic 部分将陆续抽入本库。
 
+2026-09 起有了**第二个 reference deployment**:国内一家医疗器械制造企业的四部门 AI 试点——Linux 服务器上的常驻 bot、全员 Windows 电脑一条命令装好个人 Codex、第三方模型、员工个人 agent 与公司 bot 经 IM 做 A2A。它与车队部署互为对照,分出了哪些裁决是普适的、哪些只是第一个部署的局部经验;通用化的 lessons 见 [docs/LESSONS-MANUFACTURING-PILOT.md](./docs/LESSONS-MANUFACTURING-PILOT.md),其中的「问题模型」已并入 onboarding。
+
 本库做的事,就是把这套生产系统里 **generic 的部分**(三层架构、vault 规范、persona 管线、skill 闭环、运维工具箱)抽出来,变成任何团队 `npx` 一下就能拥有的东西。
 
 ## 架构
@@ -96,8 +98,8 @@ npx @ha7ch/ai-native-company onboard
 - **轻形态 MVP** ✅:云上公司 vault(Worker + R2,MCP 五工具 + 版本历史)+ onboarding/join/ingest 三 skill,见 [`light/`](./light/)
 - **M0** 立项:调研 + SPEC ✅
 - **M1** 抽取:从 reference deployment 抽出 vault 模板、persona 渲染管线、launchd installer —— `anc init` 能在干净 Mac mini 上拉起「飞书 × Claude Code」的最小公司
-- **M2** 对话式 onboarding skill + 资料自动结构化入库 + `anc audit` 安全体检初版
-- **M3** 钉钉 / 企业微信 driver + Codex CLI 第二 harness
+- **M2** 对话式 onboarding skill(含问题模型)+ 员工级访谈 bot + 资料自动结构化入库 + `anc audit` 安全体检初版
+- **M3** 钉钉 / 企业微信 driver + Codex CLI 第二 harness + Linux/systemd installer + 第三方模型边界代理
 - **M4** 运维产品化:watchdog、健康探针、token 日报、audit 强化
 - **M5** skill 生态:公司内 skill registry、eval 回归
 
