@@ -21,16 +21,30 @@ function filterSse(body) {
   const events = records.map(parseSseRecord);
   const toolIndexes = new Set();
   const textIndexes = new Set();
+  const keptIndexes = new Map();
   for (const event of events) {
     if (event?.type !== "content_block_start") continue;
     if (event.content_block?.type === "tool_use") toolIndexes.add(event.index);
     if (event.content_block?.type === "text") textIndexes.add(event.index);
+    else keptIndexes.set(event.index, keptIndexes.size);
   }
   if (toolIndexes.size === 0) return body;
-  const kept = records.filter((record, i) => {
+  const kept = records.flatMap((record, i) => {
     const event = events[i];
-    if (!event) return true;
-    return !(textIndexes.has(event.index) && String(event.type).startsWith("content_block_"));
+    if (!event || !String(event.type).startsWith("content_block_")) return [record];
+    if (textIndexes.has(event.index)) return [];
+    if (!keptIndexes.has(event.index)) return [record];
+    // SDKs append starts to content[], then address deltas/stops by index.
+    // Removing text must therefore renumber every retained block event.
+    const rewritten = { ...event, index: keptIndexes.get(event.index) };
+    let wroteData = false;
+    const lines = record.split(/\r?\n/).flatMap((line) => {
+      if (!line.startsWith("data:")) return [line];
+      if (wroteData) return [];
+      wroteData = true;
+      return [`data: ${JSON.stringify(rewritten)}`];
+    });
+    return [lines.join("\n")];
   });
   return Buffer.from(kept.join("\n\n"), "utf8");
 }

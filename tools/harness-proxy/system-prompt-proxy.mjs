@@ -82,7 +82,7 @@ const server = http.createServer((request, response) => {
           const contentType = String(upstreamResponse.headers["content-type"] ?? "");
           const original = Buffer.concat(parts);
           const { body: plain, decoded } = decode(original, String(upstreamResponse.headers["content-encoding"] ?? "").toLowerCase());
-          const visible = decoded && filterToolTurns && isMessages ? filterToolTurnNarration(plain, contentType) : original;
+          const visible = decoded && filterToolTurns && isMessages ? filterToolTurnNarration(plain, contentType) : plain;
           const responseHeaders = { ...upstreamResponse.headers };
           if (decoded) delete responseHeaders["content-encoding"];
           delete responseHeaders["transfer-encoding"];
@@ -105,6 +105,6 @@ const server = http.createServer((request, response) => {
 
 if (process.argv[1] && import.meta.url.endsWith(process.argv[1].split("/").pop())) {
   server.listen(port, "127.0.0.1", () => {
-    console.error(`[anc-harness-proxy] listening on 127.0.0.1:${port} mode=${mode} persona_chars=${persona.length}`);
+    console.error(`[anc-harness-proxy] listening on 127.0.0.1:${server.address().port} mode=${mode} persona_chars=${persona.length}`);
   });
 }
