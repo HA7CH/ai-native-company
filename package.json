@@ -21,5 +21,8 @@
     "company",
     "bot"
   ],
+  "scripts": {
+    "test": "node --test tools/harness-proxy/harness-proxy.test.mjs"
+  },
   "private": true
 }

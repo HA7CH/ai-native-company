@@ -117,6 +117,8 @@ mode: dontAsk
 allowed_tools: [Read, Grep, Glob, WebSearch, WebFetch]
 vault_scope: [projects, clients]   # 主力数据目录:路由表置顶标「你的主力」
 skills: [now, im-send]
+reset_on_idle_mins: 30       # 可选;多轮工作流角色(访谈 bot)必须为 0(试点裁决,SPEC §3.1)
+display: default             # 可选;employee-facing 角色用 quiet(关工具消息 / 页脚 / 已读表情)
 ---
 ## 职责
 管什么、不管什么(一行 bold 列表)。
@@ -158,7 +160,9 @@ disabled: false              # true = 渲染时跳过该 project(离职停用而
 | 文件头注释 | `# anc:generated v=<anc版本> inputs=<sha256> at=<ts>` | 指纹头:漂移检测免重渲染、幂等短路、`--adopt` 门的判据。**inputs = org 树 + host.json 相关字段 + gateway-extra.toml 的联合 hash**——只改主机层输入同样触发重渲染,不会被「org 未变」短路漏掉 |
 | `name` | `<company.id>-<member.name>` | 顺序 = members 目录名排序 + devbot 殿后(输出确定性,diff 稳定) |
 | `admin_from` | company.admins 的 open_id 逗号串 | **必须写 project 顶层**(写进 platforms.options 被上游静默忽略,渲染器硬编码位置 + 校验器专项检查) |
-| `reset_on_idle_mins` | 常量 30 | |
+| `reset_on_idle_mins` | role.reset_on_idle_mins ∥ 30 | 多轮工作流角色必须 0,且同时渲染 `filter_external_sessions = false`(重启后可续接;试点回归测试锁定) |
+| `[projects.display]` | role.display == quiet 时渲染 `mode="quiet"`、`thinking_messages=false`、`tool_messages=false`、`reply_footer=false`;平台段 `reaction_emoji="none"`、`done_emoji="none"` | 面向员工的 bot 不该像在监视;`quiet` 关不掉工具轮次叙述,第三方模型下靠 `tools/harness-proxy/`(SPEC §3.2) |
+| `[[hooks]]` | 可选:role.hooks(如 `message.sent` → 归档脚本,`async=true`) | 事件驱动归档(试点:访谈报告在发送时归档),不靠 bot 自己记得 |
 | `[projects.auto_compress]` | **可选**:defaults.auto_compress_max_tokens 存在才渲染 | 上游已有的阈值治理特性,承接生产 wrapper 的 /compact 兜底(注意:#1111 的 reuse-mode 深层治理仍缺,非本项能补);新公司默认开,存量迁移按现状 |
 | `[[projects.agent.providers]]` | **可选**:company.fallback_provider(name/base_url/model),api_key = `${ANC_PROVIDER_KEY_<NAME>}`;providers.env 可带成本控制变量 | 兜底 provider(SPEC §8);存量部署若已挂 fallback,迁移「不回退」必需 |
 | `[projects.agent] type` | `"claudecode"` | |
