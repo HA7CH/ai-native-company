@@ -10,6 +10,21 @@
 - [x] 关键裁决:cc-connect 之上建约定层(不 fork 不自研);官方 CLI 双 harness;一人一 bot;每 bot 一 cwd 枢轴
 - [x] README + SPEC + PLAN + RESEARCH
 
+## 轻形态 MVP — BYO Claude Code + 云上公司 vault ✅(2026-07-24 交付)
+
+- [x] vault 服务(Cloudflare Worker + R2,MCP 五工具 + 版本历史 + CAS),经 Codex review 合入
+- [x] 三 skill:onboard(访谈建库)/ join(接入+名片同步)/ ingest(结构化入库);技能分发名片化(正文住 vault,全员即时生效)
+- [x] HA7CH 试点实例部署(自带账号原则;自定义域解决国内可达)
+- [ ] 首家公司完整走通 onboarding 并留存使用(HA7CH 自己 → 再找一家非自家)
+- 与托管形态(M1-M4)共享 vault 规范,互为消费端,不互斥
+
+### Backlog(登记,按需启动)
+
+- per-member token + `skills/` 写权限分权(供应链边界;密钥登记表体系前提)
+- 共享托管 mini(一机多公司,SPEC 开放问题 2 已改判,约束见彼处)
+- Cloudflare Sandbox 云 target 合规 spike(容器内 setup-token + 1 bot 观察两周)
+- 公司密钥管理(vault 只存登记表不存值;「密钥即服务」为独立产品面)
+
 ## M1 — 抽取:`anc init` 拉起最小公司(飞书 × Claude Code)
 
 目标:在一台干净 Mac mini 上,`anc init` + 引导 checklist 走完,得到一个能回话的 N-bot 公司。详细技术设计见 [M1-DESIGN.md](./M1-DESIGN.md)。

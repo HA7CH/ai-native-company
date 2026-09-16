@@ -11,3 +11,4 @@ _research/
 # light/vault-service 本地态
 .dev.vars
 .wrangler/
+wrangler.local.jsonc

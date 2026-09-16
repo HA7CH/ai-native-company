@@ -21,7 +21,7 @@ npx wrangler secret put VAULT_TOKEN --name anc-vault-<公司名>
 # ↑ 输一个长随机串,这就是公司的钥匙;--name 必须与部署名一致,否则 secret 会写到别的 Worker、服务恒 401
 ```
 
-产出地址形如 `https://anc-vault-<公司名>.<账号>.workers.dev`。
+产出地址形如 `https://anc-vault-<公司名>.<账号>.workers.dev`。绑自定义域/固化实例参数:在本目录建 `wrangler.local.jsonc`(gitignored,写 name/routes 等公司专属配置),`npx wrangler deploy -c wrangler.local.jsonc`——实例信息永不进仓库(自带账号原则)。
 
 > 费用:Workers Paid $5/月起;R2 10GB 免费额度内 markdown 规模基本为零。
 
