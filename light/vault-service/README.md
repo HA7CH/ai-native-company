@@ -1,11 +1,15 @@
-# anc-vault:公司共享 vault 服务(轻形态 MVP)
+# anc-vault:公司共享 vault 服务(分层轻形态 v2)
 
-一句话:**全公司的文件(markdown / PDF / JSON)在云上只有一份,每个人的 Claude Code 一行命令连上来,读写立即全员可见,写入自动留历史版本。**
+一句话:**全公司的文件在云上只有一份;结构化 markdown 增量同步到每个人本地让 agent 全速 grep,GB 级原件留在云上按需单取,写入自动留历史版本。**
+
+形态选型(有没有大量 PDF → 走 git 还是走本方案)见 [`docs/VAULT-FORMS.md`](../../docs/VAULT-FORMS.md)。核心一句:**MCP 是控制面,不是数据通道**——
+agent 逐 token 生成 base64 的真实上限约 100–150 KB,靠它搬 GB 级原件在体量上就不成立。
 
 - 存储:Cloudflare R2(一个 bucket = 一家公司)
-- 接口:一个 Worker,暴露 MCP 五工具 `vault_list / vault_read / vault_search / vault_write / vault_history`
+- 四条接口:`POST /mcp`(控制面六工具)、`GET /manifest`(增量同步清单)、`GET|PUT /raw/<path>`(流式读写)
+- 分层:`index`(文本,同步到本地)/ `originals`(路径含 `_originals` 段,按需取)/ `_history`(只读)
 - 零运行时依赖;鉴权 Bearer token,未配 token 服务全拒(默认值即安全)
-- 覆盖写之前旧版自动存 `_history/<path>/<时间戳>`(含 author/reason),可查可回滚;`_history/` 只读
+- 覆盖写强制 `base_etag`(read-before-write),旧版自动存 `_history/<path>/<时间戳>`;`_history/` 只读
 
 ## 部署(每家公司一次,约 5 分钟)
 
@@ -25,13 +29,27 @@ npx wrangler secret put VAULT_TOKEN --name anc-vault-<公司名>
 
 > 费用:Workers Paid $5/月起;R2 10GB 免费额度内 markdown 规模基本为零。
 
-## 每个成员接入(一行)
+## 每个成员接入(两步)
 
 ```bash
+# 1. MCP 控制面(问事、写入、查原件位置)
 claude mcp add --transport http vault https://<worker地址>/mcp --header "Authorization: Bearer <token>"
+
+# 2. 本地镜像(让 agent 用 rg 全速搜,不走网络、不会截断)
+node light/cli/anc.mjs init https://<worker地址> <token> --name <公司名>
+node light/cli/anc.mjs pull
 ```
 
-之后在自己的 Claude Code 里直接问公司的事;建库跑 `anc-onboard`,入库跑 `anc-ingest`(见 `../skills/`)。
+第 2 步只同步结构化 markdown 与 OCR 文本(通常几百 KB 到几 MB),GB 级原件不动,
+要看时 `anc open <路径>` 单取。之后 Claude Code 与 Codex 直接在镜像目录里 `rg`/`Read`,
+零改造。建库跑 `anc-onboard`,入库跑 `anc-ingest`(见 `../skills/`)。
+
+### 为什么要本地镜像
+
+服务端搜索在大体量下会**静默返回不完整结果**:全局命中行数一封顶就停止扫描,后面的文件
+一个字节都没读过,而提示只说「已截断」——使用者会把它当成完整答案。v2 改成按文件配额、
+保证命中**面**完整,但本地 `rg` 依然更快、更全、支持正则与上下文。
+**服务端搜索是没装 CLI 时的兜底。**
 
 ## 本地开发与自测
 
@@ -52,10 +70,24 @@ curl -s $URL -H "Authorization: Bearer $TOKEN" -H 'content-type: application/jso
   -d '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"vault_write","arguments":{"path":"CLAUDE.md","content":"# demo","author":"dev","reason":"smoke"}}}'
 ```
 
-## 边界(MVP 已知限制,升级路径见 docs/LIGHT-MVP.md)
+## 自测
 
-- 单 token 一家公司,不分成员权限(per-member token / OAuth 是下一步)
-- 搜索是逐文件扫描(≤400 文件/15MB/次),量大再上索引;真相永远是 R2 里的文件
-- 二进制原件 ≤6MB;断网不可用(要离线,用托管形态的本地 vault)
-- **国内网络注意**:`*.workers.dev` 裸域在部分国内网络不可达,生产使用请在 Cloudflare 给 Worker 绑自定义域(dashboard → Workers → 域名与路由)
-- 写并发语义:后提交者胜出,**每一个被替换的版本都自动存档于 `_history/` 可恢复**(窄窗口竞争由 etag CAS 兜底报冲突);跨「读-改-写」全周期的严格互斥是下一步(etag 显式传递)
+```bash
+npx wrangler dev --port 8799 --local     # 起本地实例(miniflare 模拟 R2)
+node ../test/e2e.mjs                     # 44 项:分层/搜索完整性/写报告并发/原件通道/中文/护栏
+node ../test/cli-collab.mjs              # 12 项:两个人同时写一份报告的完整链路
+```
+
+> e2e 会写入**无法删除**的数据(vault 刻意没有删除接口:员工删不掉,只有管理员能从 R2 侧删)。
+> 对着有真实内容的非本地实例跑会被拒绝,除非显式 `--i-know`。
+
+## 边界(已知限制,完整清单见 docs/VAULT-FORMS.md)
+
+- 单 token 一家公司,不分成员权限。需要按项目/密级隔离时**权限边界 = 部署边界**:
+  同一份源码多部署一次,另一个桶、另一个 token。per-member token 是下一步
+- R2 是唯一一份,`_history` 是版本历史**不是备份**;备份上线前 vault 不能是任何档案的唯一副本
+- 扫描件无文字层时 grep 零命中 —— 这在**任何形态下**都成立,要先跑 OCR 生成 `_ocr/` 文本层
+- 服务端全量 `/manifest` 需全量 list 后筛;千级键毫秒,十万级键需数秒 —— 到那个量级应把清单物化并增量更新
+- **国内网络注意**:`*.workers.dev` 裸域在部分国内网络不可达,生产使用请在 Cloudflare 给 Worker 绑自定义域
+- 数据落在 Cloudflare(境外基础设施)。涉个人信息/政府国企底稿/法定保存年限档案时,
+  这是**先于技术的决策**;若境外不可接受,换境内对象存储重新部署同一份逻辑
