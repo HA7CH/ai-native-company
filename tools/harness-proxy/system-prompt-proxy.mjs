@@ -75,10 +75,23 @@ const server = http.createServer((request, response) => {
       const target = new URL(upstreamBase + request.url);
       const headers = { ...request.headers, host: target.host, "content-length": body.length };
       const transport = target.protocol === "https:" ? https : http;
+      let settled = false;
+      // 上游中途断链(reset、半截 SSE)只会触发 aborted/error,不会触发 end。
+      // 缓冲式代理必须自己收尾:否则 harness 那一侧永远等不到响应,bot 卡死在这一轮。
+      // 半截响应不回传——截断的 SSE 在 harness 眼里是一轮「正常结束」,比报错更糟。
+      const fail = (error) => {
+        if (settled) return;
+        settled = true;
+        if (!response.headersSent) response.writeHead(502, { "content-type": "application/json" });
+        response.end(JSON.stringify({ error: { message: error?.message ?? "upstream connection closed" } }));
+      };
       const upstream = transport.request(target, { method: request.method, headers }, (upstreamResponse) => {
         const parts = [];
+        upstreamResponse.on("error", fail);
         upstreamResponse.on("data", (chunk) => parts.push(chunk));
         upstreamResponse.on("end", () => {
+          if (settled) return;
+          settled = true;
           const contentType = String(upstreamResponse.headers["content-type"] ?? "");
           const original = Buffer.concat(parts);
           const { body: plain, decoded } = decode(original, String(upstreamResponse.headers["content-encoding"] ?? "").toLowerCase());
@@ -91,10 +104,7 @@ const server = http.createServer((request, response) => {
           response.end(visible);
         });
       });
-      upstream.on("error", (error) => {
-        if (!response.headersSent) response.writeHead(502, { "content-type": "application/json" });
-        response.end(JSON.stringify({ error: { message: error.message } }));
-      });
+      upstream.on("error", fail);
       upstream.end(body);
     } catch (error) {
       response.writeHead(400, { "content-type": "application/json" });
