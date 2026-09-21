@@ -104,10 +104,30 @@ for (const newline of ["\n", "\r\n"]) {
 
 // Exercise the real HTTP process, including its environment switch and headers.
 import http from "node:http";
+import net from "node:net";
 import zlib from "node:zlib";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { fileURLToPath } from "node:url";
+
+function startProxy(t, upstreamPort, env = {}) {
+  const child = spawn(process.execPath, [fileURLToPath(new URL("./system-prompt-proxy.mjs", import.meta.url))], {
+    env: { ...process.env, ANC_PROXY_PORT: "0", ANC_SYSTEM_PROMPT_MODE: "replace", ANC_SYSTEM_PROMPT_FILE: fileURLToPath(new URL("./README.md", import.meta.url)), ANC_UPSTREAM_BASE_URL: `http://127.0.0.1:${upstreamPort}`, ...env },
+    stdio: ["ignore", "ignore", "pipe"],
+  });
+  t.after(() => { if (child.exitCode === null) child.kill(); });
+  const port = new Promise((resolve, reject) => {
+    let stderr = "";
+    child.on("error", reject);
+    child.on("exit", () => reject(new Error(`proxy exited before ready: ${stderr}`)));
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+      const match = stderr.match(/listening on 127\.0\.0\.1:(\d+)/);
+      if (match) resolve(Number(match[1]));
+    });
+  });
+  return { child, port };
+}
 
 test("HTTP: compressed responses remain readable with filtering on/off and other routes", { timeout: 15000 }, async (t) => {
   const payload = { content: [{ type: "text", text: "narration" }, { type: "tool_use", id: "one", name: "Read", input: { file_path: "/tmp/one.txt" } }] };
@@ -124,23 +144,10 @@ test("HTTP: compressed responses remain readable with filtering on/off and other
   t.after(() => new Promise((resolve) => upstream.close(resolve)));
   await new Promise((resolve, reject) => { upstream.once("error", reject); upstream.listen(0, "127.0.0.1", resolve); });
   for (const enabled of ["1", "0"]) {
-    const child = spawn(process.execPath, [fileURLToPath(new URL("./system-prompt-proxy.mjs", import.meta.url))], {
-      env: { ...process.env, ANC_PROXY_PORT: "0", ANC_FILTER_TOOL_TURNS: enabled, ANC_SYSTEM_PROMPT_MODE: "replace", ANC_SYSTEM_PROMPT_FILE: fileURLToPath(new URL("./README.md", import.meta.url)), ANC_UPSTREAM_BASE_URL: `http://127.0.0.1:${upstream.address().port}` },
-      stdio: ["ignore", "ignore", "pipe"],
-    });
+    const { child, port: ready } = startProxy(t, upstream.address().port, { ANC_FILTER_TOOL_TURNS: enabled });
     const exited = once(child, "exit");
-    t.after(() => { if (child.exitCode === null) child.kill(); });
     try {
-      const port = await new Promise((resolve, reject) => {
-        let stderr = "";
-        child.on("error", reject);
-        child.on("exit", () => reject(new Error(`proxy exited before ready: ${stderr}`)));
-        child.stderr.on("data", (chunk) => {
-          stderr += chunk;
-          const match = stderr.match(/listening on 127\.0\.0\.1:(\d+)/);
-          if (match) resolve(Number(match[1]));
-        });
-      });
+      const port = await ready;
       for (const path of ["/v1/messages", "/v1/models"]) {
         for (const encoding of [...Object.keys(encoders), "broken"]) {
           const { headers, body } = await new Promise((resolve, reject) => {
@@ -167,5 +174,45 @@ test("HTTP: compressed responses remain readable with filtering on/off and other
       child.kill();
       await exited;
     }
+  }
+});
+
+// 上游在响应中途 reset:只有 aborted/error,没有 end。代理必须自己收尾,
+// 否则 harness 那一侧永远等不到响应——表现为 bot 这一轮彻底没反应。
+test("HTTP: an upstream that resets mid-response fails the request instead of hanging it", { timeout: 15000 }, async (t) => {
+  const upstream = net.createServer((socket) => {
+    socket.on("error", () => {});
+    socket.once("data", () => {
+      socket.write("HTTP/1.1 200 OK\r\ncontent-type: text/event-stream\r\ncontent-length: 500\r\n\r\n");
+      socket.write("event: content_block_start\n");
+      setTimeout(() => socket.destroy(), 20);
+    });
+  });
+  t.after(() => new Promise((resolve) => upstream.close(resolve)));
+  await new Promise((resolve, reject) => { upstream.once("error", reject); upstream.listen(0, "127.0.0.1", resolve); });
+
+  const { child, port: ready } = startProxy(t, upstream.address().port);
+  const exited = once(child, "exit");
+  try {
+    const port = await ready;
+    const { statusCode, body } = await new Promise((resolve, reject) => {
+      const req = http.request({ hostname: "127.0.0.1", port, path: "/v1/messages", method: "POST", headers: { "content-type": "application/json" } }, (res) => {
+        const chunks = [];
+        res.on("data", (chunk) => chunks.push(chunk));
+        res.on("error", reject);
+        res.on("end", () => resolve({ statusCode: res.statusCode, body: Buffer.concat(chunks) }));
+      });
+      req.on("error", reject);
+      // 回归点:修复前这里永远超时,而不是拿到一个错误响应。
+      req.setTimeout(5000, () => reject(new Error("proxy never answered: request hung after upstream reset")));
+      req.end("{}");
+    });
+    assert.equal(statusCode, 502);
+    // 半截 SSE 不能当成一轮正常结束回给 harness。
+    assert.doesNotMatch(body.toString(), /content_block_start/);
+    assert.ok(JSON.parse(body).error.message, "502 body carries an error message");
+  } finally {
+    child.kill();
+    await exited;
   }
 });
