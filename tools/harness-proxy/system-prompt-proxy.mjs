@@ -74,6 +74,11 @@ const server = http.createServer((request, response) => {
       }
       const target = new URL(upstreamBase + request.url);
       const headers = { ...request.headers, host: target.host, "content-length": body.length };
+      // 请求体已整段收进内存,这里按 content-length 重新定帧;若把 harness 侧的
+      // transfer-encoding: chunked 一并透传,两个定帧头同时出现,严格的 HTTP/1.1
+      // 端点(Node 自身、nginx)判 HPE_INVALID_CONTENT_LENGTH 直接断连。响应侧已经
+      // 这么删了,请求侧同理。
+      delete headers["transfer-encoding"];
       const transport = target.protocol === "https:" ? https : http;
       const upstream = transport.request(target, { method: request.method, headers }, (upstreamResponse) => {
         const parts = [];

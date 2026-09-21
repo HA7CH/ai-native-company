@@ -105,6 +105,7 @@ for (const newline of ["\n", "\r\n"]) {
 // Exercise the real HTTP process, including its environment switch and headers.
 import http from "node:http";
 import zlib from "node:zlib";
+import fs from "node:fs";
 import { spawn } from "node:child_process";
 import { once } from "node:events";
 import { fileURLToPath } from "node:url";
@@ -168,4 +169,60 @@ test("HTTP: compressed responses remain readable with filtering on/off and other
       await exited;
     }
   }
+});
+
+// 不是每个 harness 都把请求体一次性交给 http 客户端:流式写 body 的客户端不带
+// content-length,走 transfer-encoding: chunked。代理把 body 收进内存后按
+// content-length 重发,必须同时删掉 chunked,否则上游看到两个定帧头直接断连。
+test("HTTP: a harness that streams its request body still reaches upstream", { timeout: 15000 }, async (t) => {
+  const personaFile = fileURLToPath(new URL("./README.md", import.meta.url));
+  const persona = fs.readFileSync(personaFile, "utf8").trim();
+  const clientErrors = [];
+  let forwarded = null;
+  const upstream = http.createServer((req, res) => {
+    const chunks = [];
+    req.on("data", (chunk) => chunks.push(chunk));
+    req.on("end", () => {
+      forwarded = { headers: req.headers, body: Buffer.concat(chunks).toString("utf8") };
+      res.writeHead(200, { "content-type": "application/json" });
+      res.end(JSON.stringify({ content: [{ type: "text", text: "ok" }] }));
+    });
+  });
+  upstream.on("clientError", (error, socket) => { clientErrors.push(error.code); socket.destroy(); });
+  t.after(() => new Promise((resolve) => upstream.close(resolve)));
+  await new Promise((resolve, reject) => { upstream.once("error", reject); upstream.listen(0, "127.0.0.1", resolve); });
+
+  const child = spawn(process.execPath, [fileURLToPath(new URL("./system-prompt-proxy.mjs", import.meta.url))], {
+    env: { ...process.env, ANC_PROXY_PORT: "0", ANC_SYSTEM_PROMPT_MODE: "replace", ANC_SYSTEM_PROMPT_FILE: personaFile, ANC_UPSTREAM_BASE_URL: `http://127.0.0.1:${upstream.address().port}` },
+    stdio: ["ignore", "ignore", "pipe"],
+  });
+  const exited = once(child, "exit");
+  t.after(async () => { if (child.exitCode === null) child.kill(); await exited; });
+  const port = await new Promise((resolve, reject) => {
+    let stderr = "";
+    child.on("error", reject);
+    child.on("exit", () => reject(new Error(`proxy exited before ready: ${stderr}`)));
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+      const match = stderr.match(/listening on 127\.0\.0\.1:(\d+)/);
+      if (match) resolve(Number(match[1]));
+    });
+  });
+
+  const status = await new Promise((resolve, reject) => {
+    const req = http.request({ hostname: "127.0.0.1", port, path: "/v1/messages", method: "POST", headers: { "content-type": "application/json" } }, (res) => {
+      res.resume();
+      res.on("end", () => resolve(res.statusCode));
+    });
+    req.on("error", reject);
+    // write() 先于 end():Node 无法预知长度,于是发 chunked 而不是 content-length
+    req.write('{"system":"You are Claude Code",');
+    req.end('"messages":[]}');
+  });
+
+  assert.deepEqual(clientErrors, [], "upstream must accept the forwarded framing");
+  assert.equal(status, 200);
+  assert.equal(forwarded.headers["transfer-encoding"], undefined);
+  assert.equal(Number(forwarded.headers["content-length"]), Buffer.byteLength(forwarded.body));
+  assert.equal(JSON.parse(forwarded.body).system, persona, "persona 替换要照常生效");
 });
