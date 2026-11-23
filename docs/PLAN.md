@@ -10,16 +10,20 @@
 - [x] 关键裁决:cc-connect 之上建约定层(不 fork 不自研);官方 CLI 双 harness;一人一 bot;每 bot 一 cwd 枢轴
 - [x] README + SPEC + PLAN + RESEARCH
 
-## M1 — 抽取:`anc init` 拉起最小公司(飞书 × Claude Code)
+## M1 — 抽取:`anc init` 拉起最小公司(优先飞书 × Codex)
+
+本批开发版已实现：Codex `init`、org/config/persona 渲染、角色与技能模板、`doctor`、三类 LaunchAgent、`status`、显式接管、事务回滚和 `selftest --sandbox`。58 项自动化测试、隔离 launchd 与 watchdog 有界恢复测试通过；现场已完成当前公司 gateway 接管和 watchdog 安装。下面的实现项与最终验收分开，连接成功不等于 M1 全部完成。操作见 [M1-HOSTED-OPERATIONS.md](M1-HOSTED-OPERATIONS.md)。
 
 目标:在一台干净 Mac mini 上,`anc init` + 引导 checklist 走完,得到一个能回话的 N-bot 公司。详细技术设计见 [M1-DESIGN.md](./M1-DESIGN.md)。
 
 - [ ] 从 reference deployment 抽出 generic 部分,形成 **vault 模板仓库**(目录骨架、CONTRIBUTING、路由 CLAUDE.md/AGENTS.md 双文件、templates/)
-- [ ] **org 真相源 schema**(members/ + roles/,markdown + frontmatter)与 **config 渲染器**(org → cc-connect config.toml,原子写 + 三重校验 + dry-run)
-- [ ] **launchd installer**:gateway / vault-sync / watchdog 三件套 plist 生成(完整 PATH、无 SessionCreate、GUI 会话),`anc doctor` 环境诊断
-- [ ] 内置角色模板库第一批(通用:经理/运营/技术/对外),persona 七段式渲染
-- [ ] `anc deploy personas|skills`、`anc status`
+- [x] **org 真相源 schema**(members/ + roles/,markdown + frontmatter)与 **config 渲染器**(org → cc-connect config.toml,原子写 + schema/解析/差异校验 + dry-run)
+- [x] **launchd installer**:gateway / vault-sync / watchdog 三件套 plist 生成(完整 PATH、无 SessionCreate、GUI 会话),`anc doctor` 环境诊断；同步仅在远端显式配置后安装
+- [x] 内置角色模板库第一批(通用:经理/运营/技术/对外),persona 七段式渲染
+- [x] `anc deploy personas|skills`、`anc status`
 - [ ] 验收:Climax 生产从手工脚本切到 `anc` 命令面,行为不回退;一台测试 mini 从零拉起 demo 公司 ≤ 1 小时人工时间
+
+当前现场待验收：新部署的各成员真实消息与附件回传、第二 macOS 用户新装及恢复。私有远端的上传、恢复副本比对和后台同步须分别验证，不能以交互式上传成功代替后台任务验收。原 reference deployment 不在本地，不能用当前公司的迁移替代该生产环境的验收结论。`status --usage` 的 Codex 用量汇总延至 M4，不调用 Claude 专有 `/cost`。
 
 ## M2 — 对话式 onboarding + 自动入库
 
@@ -29,10 +33,10 @@
 - [ ] `anc audit [--fix]` 第一版(默认值、密钥权限、白名单、bypass 检查)
 - [ ] 验收:一个非 Climax 的真实小团队(找一家设计室/贸易行/俱乐部)完整走通 onboarding 并留存使用
 
-## M3 — 第二平台与第二 harness
+## M3 — 第二平台与后端扩展
 
 - [ ] 钉钉(Stream Mode)、企业微信(智能机器人长连接)接入:主要是渲染器支持 + 逐平台建应用 checklist + 卡片降级策略
-- [ ] **Codex CLI 第二后端**:Harness 接口落地(runTurn/resume/事件流),AGENTS.md persona 注入,回归两 harness 行为一致性(试点已有 Codex 生产实证,见 LESSONS §1)
+- [ ] **双后端回归（Codex 最小链路已提前到 M1）**:Harness 接口落地(runTurn/resume/事件流),AGENTS.md persona 注入,回归两 harness 行为一致性(试点已有 Codex 生产实证,见 LESSONS §1)
 - [ ] **第三方模型边界代理接入渲染管线**:company.fallback_provider 非官方端点时,渲染器自动拉起 `tools/harness-proxy/` 并把 base_url 指向 loopback(SPEC §3.2)
 - [ ] **Linux/systemd installer 后端**(SPEC §3.3):与 launchd 三件套同构 + `.path` 配置监听 + bubblewrap 沙箱
 - [ ] **批量 provisioning**(SPEC 开放问题 5):是否以 `anc provision` 交付,随 #8 裁决

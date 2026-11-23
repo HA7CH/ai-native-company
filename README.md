@@ -4,7 +4,38 @@
 >
 > Turn your team into an AI-native company — all company knowledge in markdown, one AI per person.
 
-**状态:轻形态 MVP 已可用,托管形态设计完成。** 架构已在一支真实车队生产验证(markdown vault 13+ 周、6-bot 矩阵 8 周,见下)。详细设计见 [SPEC.md](./SPEC.md)(托管形态)与 [docs/LIGHT-MVP.md](./docs/LIGHT-MVP.md)(轻形态),实施计划见 [docs/PLAN.md](./docs/PLAN.md),调研依据见 [docs/RESEARCH.md](./docs/RESEARCH.md)。CLI bin 名为 `anc`(尚未发布)。
+**状态:托管形态已有 Codex CLI 开发版；轻形态为独立可选实现。** 详细设计见 [SPEC.md](./SPEC.md)(托管形态)与 [docs/LIGHT-MVP.md](./docs/LIGHT-MVP.md)(轻形态),实施计划见 [docs/PLAN.md](./docs/PLAN.md),调研依据见 [docs/RESEARCH.md](./docs/RESEARCH.md)。CLI bin 名为 `anc`(尚未发布)。
+
+## 托管 CLI 开发版：先初始化，再部署
+
+当前实现优先走 **macOS + 飞书 + 官方 Codex CLI**，不需要 Claude Code，也不依赖轻形态。初始化、诊断、配置预览和 launchd 部署代码位于 `src/`；完整 M1 的远端同步、watchdog、旧部署接管和跨后端回归仍按 PLAN 推进。包仍为 private，以下从源码运行，不能直接用 npm 上的同名包替代。
+
+```bash
+npm install
+npm run build
+node dist/cli.js init --dir ../demo-vault
+# 初始化只创建文件，不启动机器人；按生成的清单补充飞书应用和本人账号。
+node dist/cli.js doctor
+node dist/cli.js deploy config          # 预览，生成配置里只有 secret 环境变量引用
+node dist/cli.js deploy config --apply  # 检查通过后才创建 LaunchAgent
+node dist/cli.js status
+```
+
+也支持 `pnpm install --frozen-lockfile` 与 `pnpm run build`。`init --non-interactive` 搭配 `--company-name / --company-id / --member-name / --member-id` 用于脚本；`--dry-run` 零写入，`--json` 输出结构化结果。默认本机状态在 `~/.anc`；测试或隔离运行用 `--state-dir`，所有后续命令保持相同参数。
+
+- 成员和角色是 vault 内的 markdown + frontmatter；本机 secret 只写在状态目录的 `secrets.env`，权限 600。
+- 重跑 init 保留用户修改；不支持 `--force`。异常退出留下的锁会给出核实进程与清锁指引。
+- deploy 只操作已由 anc 管理的生成文件；现有手工网关不会被自动覆盖。同一飞书应用已在默认网关配置中使用时，拒绝启动另一份服务。
+- `doctor --probe` 会调用一次模型，其余默认诊断不消耗模型 token。部署前会运行本机沙箱测试；不支持受限权限的 CLI 不能通过放宽权限绕过。
+- `rollback` 恢复最近部署前的文件和服务，先验证恢复结果再报告成功。首次部署失败会移除新增服务，不谎称恢复了不存在的旧版本。
+- 密钥轮换通过私有版本文件与配置一起切换，失败回滚恢复对应旧版本；`secrets.env` 保留用户的待部署修改。状态目录含这些私有版本，勿放进 Git。
+- `status` 的 running 仅表示进程状态；必须用真人飞书提问验证知识库读取与回传。服务重启测试不能代替整机重启测试。
+
+已验证 cc-connect v1.3.4 与官方 Codex 0.171.0-alpha.13：首次调用和 resume 均执行相同权限。CLI 使用独立配置，不继承用户的 MCP、hooks 或 permission rules；模型为空时采用官方默认模型。真实部署目录须放在用户目录，不可放系统临时区。
+
+开发验证：`pnpm test`；已登录 macOS 用户可另运行 `pnpm run test:launchd`（虚构网关）与 `pnpm run test:runtime`（消耗模型 token，使用官方登录）。后者可用 `ANC_CODEX_BIN` 指定待验收的 CLI。
+
+初始化设计与实现边界见 [ANC-INIT-DESIGN.md](docs/ANC-INIT-DESIGN.md)，已完成检查及新装验收边界见 [验证记录](docs/ANC-INIT-VERIFICATION.md)。
 
 ---
 
@@ -19,7 +50,7 @@
 | 接入 | `claude mcp add` 一行;onboarding 访谈建库(行业适配器) | `anc init` + 引导 checklist |
 | 覆盖 | 用 Claude Code 的人 | 全员(含不碰终端的同事,飞书/钉钉里 @ 即用) |
 
-两种形态共享同一套 vault 规范与 skill 体系;托管形态的 IM bot 就是轻形态 vault 的另一个客户端,先轻后重、随时升级。
+两种形态共享 vault 规范；可以直接部署托管形态，不需要先部署轻形态的云服务。
 
 ## 托管形态:每个人都有一个自己的 AI bot
 
@@ -52,10 +83,10 @@ reference deployment 仓库含车队真实数据,为私有;M1 起其 generic 部
      ▼
 [Bot 层]    Alice-bot   Bob-bot   Carol-bot   …   devbot(一人一 bot)
             每个 bot = 一个 cwd:persona 文件 + 会话 + 沙箱边界
-            persona = 角色模板 × 个人定制,git 真相源渲染进 gateway 配置
+            persona = 角色模板 × 个人定制；Codex 渲染到成员 cwd/AGENTS.md
      │ 官方 CLI harness(订阅制 token)
      ▼
-[Harness]   Claude Code(一等公民)/ Codex CLI(第二后端,可切换)
+[Harness]   官方 Codex CLI(当前实现)/ Claude Code(后续适配)
      │ Read / Grep 直读盘(零 token 设计)
      ▼
 [数据层]    公司 vault:结构化 markdown + 目录路由 + git 同步总线
@@ -97,9 +128,9 @@ npx @ha7ch/ai-native-company onboard
 
 - **轻形态 MVP** ✅:云上公司 vault(Worker + R2,MCP 五工具 + 版本历史)+ onboarding/join/ingest 三 skill,见 [`light/`](./light/)
 - **M0** 立项:调研 + SPEC ✅
-- **M1** 抽取:从 reference deployment 抽出 vault 模板、persona 渲染管线、launchd installer —— `anc init` 能在干净 Mac mini 上拉起「飞书 × Claude Code」的最小公司
+- **M1** 抽取:从 reference deployment 抽出 vault 模板、persona 渲染管线、launchd installer —— `anc init` 能在干净 Mac mini 上拉起「飞书 × Codex」的最小公司
 - **M2** 对话式 onboarding skill(含问题模型)+ 员工级访谈 bot + 资料自动结构化入库 + `anc audit` 安全体检初版
-- **M3** 钉钉 / 企业微信 driver + Codex CLI 第二 harness + Linux/systemd installer + 第三方模型边界代理
+- **M3** 钉钉 / 企业微信 driver + 双后端回归 + Linux/systemd installer + 第三方模型边界代理
 - **M4** 运维产品化:watchdog、健康探针、token 日报、audit 强化
 - **M5** skill 生态:公司内 skill registry、eval 回归
 
