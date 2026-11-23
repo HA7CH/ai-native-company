@@ -132,7 +132,10 @@ export function operationsStatus(stateDir?: string, system: OperationsSystem = r
     const jobs = plan.jobs.map(label => ({ label, loaded: system.run('launchctl', ['print', `gui/${process.getuid!()}/${label}`]).status === 0 }));
     const watchdog = exists(path.join(state, 'watchdog-status.json')) ? readJSON<{ healthy: boolean; code: string; at: number }>(path.join(state, 'watchdog-status.json')) : null;
     const sync = exists(path.join(state, 'sync-status.json')) ? readJSON<Record<string, unknown>>(path.join(state, 'sync-status.json')) : null;
-    const fresh = watchdog && Date.now() / 1000 - watchdog.at < (plan.host.operations?.watchdogIntervalSeconds ?? 60) * 3;
-    return { status: plan.changed.length || plan.removed.length ? 'drift' : jobs.some(j => !j.loaded) ? 'stopped' : !fresh ? 'unknown' : !watchdog.healthy ? 'unhealthy' : 'current', jobs, watchdog, syncEnabled: !!plan.org.syncEnabled, sync };
+    const recent = (at: unknown, limit: number) => typeof at === 'number' && Number.isFinite(at) && Date.now() / 1000 >= at && Date.now() / 1000 - at < limit;
+    const fresh = watchdog && recent(watchdog.at, (plan.host.operations?.watchdogIntervalSeconds ?? 60) * 3);
+    const syncFresh = !plan.org.syncEnabled || (sync && recent(sync.at, Math.max(45 * 60, (plan.org.syncIntervalMinutes ?? 15) * 3 * 60)));
+    const syncHealthy = !plan.org.syncEnabled || (sync?.status === 'current' && sync.code === 'OK');
+    return { status: plan.changed.length || plan.removed.length ? 'drift' : jobs.some(j => !j.loaded) ? 'stopped' : !fresh || !syncFresh ? 'unknown' : !watchdog.healthy || !syncHealthy ? 'unhealthy' : 'current', jobs, watchdog, syncEnabled: !!plan.org.syncEnabled, sync };
   } catch { return { status: 'drift' }; }
 }

@@ -88,6 +88,33 @@ test('unmanaged operations service is never taken over', async t => {
   await assert.rejects(deployOperations({ ...f.opts, apply: true }, f.system), { code: 'UNMANAGED_SERVICE' });
   assert(f.loaded.has('com.anc.demo.watchdog')); assert(!fs.existsSync(f.system.launchAgentsDir));
 });
+test('enabled sync cannot report healthy while failed, blocked, missing or stale', async t => {
+  const f = fixture(t), company = path.join(f.opts.dir, 'company/company.md');
+  fs.writeFileSync(company, fs.readFileSync(company, 'utf8').replace('sync_enabled: false', 'sync_enabled: true'));
+  await deployOperations({ ...f.opts, apply: true }, f.system);
+  const now = Math.floor(Date.now() / 1000);
+  fs.writeFileSync(path.join(f.opts.stateDir, 'watchdog-status.json'), JSON.stringify({ healthy: true, code: 'OK', at: now }));
+  assert.equal(operationsStatus(f.opts.stateDir, f.system).status, 'unknown');
+  for (const [record, expected] of [
+    [{ status: 'failed', code: 'GIT_UNAVAILABLE', at: now }, 'unhealthy'],
+    [{ status: 'blocked', code: 'DIRTY', at: now }, 'unhealthy'],
+    [{ status: 'current', code: 'OK', at: now - 3600 }, 'unknown'],
+    [{ status: 'current', code: 'OK', at: now + 3600 }, 'unknown'],
+    [{ status: 'current', code: 'OK', at: now }, 'current'],
+  ]) {
+    fs.writeFileSync(path.join(f.opts.stateDir, 'sync-status.json'), JSON.stringify(record));
+    assert.equal(operationsStatus(f.opts.stateDir, f.system).status, expected);
+  }
+});
+test('sync retains the underlying Git error for inaccessible repositories', { skip: process.platform !== 'darwin' }, t => {
+  const f = fixture(t);
+  fs.writeFileSync(path.join(f.opts.stateDir, 'operations.plist'), plistObject({ vault: path.join(f.root, 'unavailable'), syncEnabled: true }));
+  const r = spawnSync('/bin/sh', ['templates/scripts/anc-sync.sh', f.opts.stateDir], { encoding: 'utf8' });
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(f.opts.stateDir, 'sync-status.json'))).code, 'GIT_UNAVAILABLE');
+  assert.match(fs.readFileSync(path.join(f.opts.stateDir, 'sync-error.log'), 'utf8'), /unavailable/);
+  assert.equal(fs.statSync(path.join(f.opts.stateDir, 'sync-error.log')).mode & 0o777, 0o600);
+});
 test('sync script fast-forwards and preserves dirty or divergent work', { skip: process.platform !== 'darwin' }, t => {
   const f = fixture(t), bare = path.join(f.root, 'remote.git'), producer = path.join(f.root, 'producer'), consumer = path.join(f.root, 'consumer');
   const git = (...args) => { const r = spawnSync('git', ['-c', 'user.name=Fixture', '-c', 'user.email=fixture@example.invalid', ...args], { encoding: 'utf8' }); assert.equal(r.status, 0, r.stderr); return r.stdout; };

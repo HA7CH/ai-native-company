@@ -19,6 +19,8 @@ watchdog 以当前进程的连接证据判断健康，不把机器人闲置时�
 
 配置 `origin` 与 tracking branch，再将公司定义设为 `sync_enabled: true`；可设 `sync_interval_min`，默认 15。重新部署 operations 后，纯 shell 同步使用 fetch + merge --ff-only。工作区有修改或分叉时保留现场并记录失败；不自动 commit、stash、reset 或 rebase。新鲜度来自最后一次成功记录，不用进程存在冒充同步成功。
 
+必须验证真实 LaunchAgent 的首轮同步；交互式终端能访问仓库不代表后台进程也能访问。macOS 的文稿、桌面等目录可能受隐私权限限制；出现 `GIT_UNAVAILABLE` 时检查本机 `sync-error.log`，按实际拒绝原因处理目录位置或系统授权。启用同步后，结果缺失或过期时 `anc status` 显示 unknown，失败或被阻断时显示 unhealthy，不报告运维健康。
+
 选择只上传部分目录或新快照时，须先明确发布源与生产副本的关系；不能把本地 bare 仓库或无远端的副本算作远端同步验收。
 
 ## 接管现有服务

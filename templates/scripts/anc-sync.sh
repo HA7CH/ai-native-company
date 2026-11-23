@@ -18,7 +18,7 @@ if ! /bin/mkdir "$state/sync.lock" 2>/dev/null; then record blocked LOCKED; exit
 trap '/bin/rm -f "$state/sync.lock/pid"; /bin/rmdir "$state/sync.lock" 2>/dev/null || true' EXIT HUP INT TERM
 printf '%s\n' "$$" > "$state/sync.lock/pid"
 export GIT_TERMINAL_PROMPT=0
-dirty=$(/usr/bin/git -C "$vault" status --porcelain 2>/dev/null) || { record failed GIT_UNAVAILABLE; exit 0; }
+dirty=$(/usr/bin/git -C "$vault" status --porcelain 2> "$state/sync-error.log") || { record failed GIT_UNAVAILABLE; exit 0; }
 if [ -n "$dirty" ]; then record blocked DIRTY; exit 0; fi
 upstream=$(/usr/bin/git -C "$vault" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null) || { record blocked NO_UPSTREAM; exit 0; }
 case "$upstream" in origin/*) ;; *) record blocked UNSUPPORTED_REMOTE; exit 0;; esac

@@ -12,7 +12,7 @@
 
 ## M1 — 抽取:`anc init` 拉起最小公司(优先飞书 × Codex)
 
-本批开发版已实现：Codex `init`、org/config/persona 渲染、角色与技能模板、`doctor`、三类 LaunchAgent、`status`、显式接管、事务回滚和 `selftest --sandbox`。56 项自动化测试、隔离 launchd 与 watchdog 有界恢复测试通过；现场已完成当前公司 gateway 接管和 watchdog 安装。下面的实现项与最终验收分开，连接成功不等于 M1 全部完成。操作见 [M1-HOSTED-OPERATIONS.md](M1-HOSTED-OPERATIONS.md)。
+本批开发版已实现：Codex `init`、org/config/persona 渲染、角色与技能模板、`doctor`、三类 LaunchAgent、`status`、显式接管、事务回滚和 `selftest --sandbox`。58 项自动化测试、隔离 launchd 与 watchdog 有界恢复测试通过；现场已完成当前公司 gateway 接管和 watchdog 安装。下面的实现项与最终验收分开，连接成功不等于 M1 全部完成。操作见 [M1-HOSTED-OPERATIONS.md](M1-HOSTED-OPERATIONS.md)。
 
 目标:在一台干净 Mac mini 上,`anc init` + 引导 checklist 走完,得到一个能回话的 N-bot 公司。详细技术设计见 [M1-DESIGN.md](./M1-DESIGN.md)。
 
