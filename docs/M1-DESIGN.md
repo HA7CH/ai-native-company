@@ -2,6 +2,8 @@
 
 版本:0.1(2026-07-24)。对应 [PLAN](./PLAN.md) M1,承接 [SPEC](../SPEC.md) §2/§3/§4/§9。
 
+> 2026-11-23 补充：优先交付「飞书 × Codex」的初始化设计草案见 [ANC-INIT-DESIGN.md](./ANC-INIT-DESIGN.md)。该文细化 init 契约并列出与本文的差异；本文仍保留原设计，相关架构裁决须在实现前同步到 SPEC。
+
 **设计方法**:对 reference deployment(climax-vault)做六路解剖(运维脚本 / cli+devbot / vault 结构 / persona / skills / cc-connect 配置模型),在其上产出三份独立设计(抽取优先 / schema 优先 / 运维优先),经三位评委(可交付性 / 技术正确性 / 产品验收)交叉评审后合成本稿。骨架取「抽取优先」路线(两票优胜),并入另两份中被评委点名的机制,评审抓出的事实错误已逐条修正;并已对照 `_research/` 六份调研原文(尤其 internal-repo §6 抽取分界、internal 实勘 §7 installer 覆盖清单、china-gateways §三 harness 实测)做过一轮事实校准。
 
 **指导思想:先包装后重写。** 生产验证过的 shell 逻辑照搬参数化,anc(TypeScript)只新写「必须结构化才可靠」的部分:org 加载、渲染、校验、launchctl 编排、doctor。目标第 4 周 Climax 可切换,第 5-6 周干净 mini 拉起 demo 公司。

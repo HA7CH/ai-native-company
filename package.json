@@ -1,6 +1,18 @@
 {
   "name": "@ha7ch/ai-native-company",
-  "version": "0.0.0",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "anc": "dist/cli.js"
+  },
+  "engines": {
+    "node": ">=20.11"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "description": "把你的团队变成 AI native company:一台 Mac mini,一人一个 bot,公司知识全在 markdown 里。One Mac mini, one bot per person, all company knowledge in markdown.",
   "license": "MIT",
   "repository": {
@@ -22,7 +34,16 @@
     "bot"
   ],
   "scripts": {
-    "test": "node --test tools/harness-proxy/harness-proxy.test.mjs"
+    "build": "tsc && node scripts/prepare-bin.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "tsc && node --test test/*.test.mjs tools/harness-proxy/harness-proxy.test.mjs",
+    "prepack": "tsc && node scripts/prepare-bin.mjs",
+    "test:launchd": "pnpm run build && node --test test/launchd.integration.mjs",
+    "test:runtime": "pnpm run build && node scripts/verify-codex-runtime.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "~5.9.3"
   },
   "private": true
 }

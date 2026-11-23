@@ -10,7 +10,9 @@
 - [x] 关键裁决:cc-connect 之上建约定层(不 fork 不自研);官方 CLI 双 harness;一人一 bot;每 bot 一 cwd 枢轴
 - [x] README + SPEC + PLAN + RESEARCH
 
-## M1 — 抽取:`anc init` 拉起最小公司(飞书 × Claude Code)
+## M1 — 抽取:`anc init` 拉起最小公司(优先飞书 × Codex)
+
+本批开发版已实现：Codex `init`、org/config/persona 渲染、`doctor`、gateway LaunchAgent、`status` 与事务回滚；已完成自动化与本机隔离集成测试。以下为完整 M1 清单，部分实现不等于整项验收通过。
 
 目标:在一台干净 Mac mini 上,`anc init` + 引导 checklist 走完,得到一个能回话的 N-bot 公司。详细技术设计见 [M1-DESIGN.md](./M1-DESIGN.md)。
 
@@ -29,10 +31,10 @@
 - [ ] `anc audit [--fix]` 第一版(默认值、密钥权限、白名单、bypass 检查)
 - [ ] 验收:一个非 Climax 的真实小团队(找一家设计室/贸易行/俱乐部)完整走通 onboarding 并留存使用
 
-## M3 — 第二平台与第二 harness
+## M3 — 第二平台与后端扩展
 
 - [ ] 钉钉(Stream Mode)、企业微信(智能机器人长连接)接入:主要是渲染器支持 + 逐平台建应用 checklist + 卡片降级策略
-- [ ] **Codex CLI 第二后端**:Harness 接口落地(runTurn/resume/事件流),AGENTS.md persona 注入,回归两 harness 行为一致性(试点已有 Codex 生产实证,见 LESSONS §1)
+- [ ] **双后端回归（Codex 最小链路已提前到 M1）**:Harness 接口落地(runTurn/resume/事件流),AGENTS.md persona 注入,回归两 harness 行为一致性(试点已有 Codex 生产实证,见 LESSONS §1)
 - [ ] **第三方模型边界代理接入渲染管线**:company.fallback_provider 非官方端点时,渲染器自动拉起 `tools/harness-proxy/` 并把 base_url 指向 loopback(SPEC §3.2)
 - [ ] **Linux/systemd installer 后端**(SPEC §3.3):与 launchd 三件套同构 + `.path` 配置监听 + bubblewrap 沙箱
 - [ ] **批量 provisioning**(SPEC 开放问题 5):是否以 `anc provision` 交付,随 #8 裁决

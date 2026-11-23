@@ -5,6 +5,18 @@
 
 ---
 
+## 当前实现裁决（2026-11-23）
+
+首个通用 CLI 交付优先实现 macOS + 飞书 + 官方 Codex，详细契约见 [ANC-INIT-DESIGN](docs/ANC-INIT-DESIGN.md)。本文其余 Claude Code 路径继续作为后续后端设计，以下条款优先于早期 M1 时序：
+
+- `anc init` 仅初始化空 vault 和本机状态，可恢复、默认不覆盖用户文件；`doctor` 只读诊断；`deploy config` 默认预览，`--apply` 才装载服务。
+- 第一位成员是普通角色；devbot 模板可保留但不要求启用。公司至多一个 devbot，首版不生成 full 权限配置。
+- Codex persona 唯一注入路径为成员 cwd 的 `AGENTS.md`；由 org 渲染，和 gateway config 同批应用，不叠加 gateway persona。知识库根路由仍保留 AGENTS/CLAUDE 双文件。
+- org 使用 `policy: readonly|workspace|full` 表达权限；普通角色禁止 full。Codex 的首次与 resume 均由适配器设置同一 named permissions profile，限定成员工作目录与知识目录、禁止直接网络访问；部署前实测读取边界与只读策略，失败禁止降级。
+- `vault_scope` 是职责路由，不能作为沙箱证明。初版共享公司概况与 knowledge；扩展业务目录须扩展受控文件白名单并验证。
+- 本机 secret 文件只作为受限键值数据解析，不当 shell 脚本执行；凭据不进入生成配置、plist、Git 或输出。
+- 本地 Git 是必备交付资产，远端同步显式配置；没有 remote 不创建定时 pull。初版启动 gateway，sync/watchdog 与既有部署接管仍按 M1 验收逐步补齐。
+
 ## 1. 愿景与设计原则
 
 **一句话:让任何小团队在一台 Mac mini 上,部署出「每个人都有一个自己的 AI bot、全公司共享一个 markdown 知识库」的运行时,并且系统随日常使用不断变强。**
@@ -32,7 +44,7 @@ Company 1 ── N Member(真人)
 Member  1 ── 1 Bot(一一对应;离职回收,入职开通)
 Bot     N ── 1 Role(角色模板:persona 骨架 + 默认 skill 集 + 数据视野)
 Bot     1 ── 1 cwd(bot 家目录:persona + session scope + 沙箱边界)
-Company 1 ── 1 devbot(公司的开发运维 bot,cwd=仓库本体,仅创始人可用)
+Company 1 ── 0..1 devbot(公司的开发运维 bot,cwd=仓库本体,仅创始人可用)
 Skill   N ── N Role(按角色分发;个人可加载额外 skill)
 Bot     1 ── N Platform 绑定(一个 bot 可绑多平台账号)
 ```
