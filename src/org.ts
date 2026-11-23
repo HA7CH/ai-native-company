@@ -58,16 +58,18 @@ function map(value: Value | undefined, field: string): Record<string, Value> {
 function id(value: Value | undefined, field: string): string {
   const s = string(value, field); if (!/^[a-z][a-z0-9-]{0,31}$/.test(s)) fail('INVALID_ORG', `${field} 不是合法 ID`, '使用小写 ASCII ID，长度不超过 32。'); return s;
 }
-export interface Member { id: string; name: string; role: string; policy: string; model: string; appId: string; openId: string; roleBody: string; body: string }
-export interface Org { id: string; name: string; timezone: string; language: string; members: Member[]; missing: string[] }
+export interface Member { id: string; name: string; role: string; policy: string; model: string; appId: string; openId: string; roleBody: string; body: string; skills?: string[]; roleTitle?: string }
+export interface Org { id: string; name: string; timezone: string; language: string; members: Member[]; missing: string[]; syncEnabled?: boolean; syncIntervalMinutes?: number }
 export function loadOrg(vault: string): Org {
   const read = (p: string) => frontmatter(fs.readFileSync(assertTree(vault, p, 'file'), 'utf8'), p);
   const c = read('company/company.md').fields;
-  shape(c, ['schema_version', 'id', 'name', 'timezone', 'language', 'platform', 'harness', 'defaults', 'admins', 'sync_enabled'], 'company');
+  shape(c, ['schema_version', 'id', 'name', 'timezone', 'language', 'platform', 'harness', 'defaults', 'admins', 'sync_enabled', 'sync_interval_min'], 'company');
   if (c.schema_version !== 1 || c.harness !== 'codex' || c.platform !== 'feishu') fail('UNSUPPORTED_ORG', '只支持 schema 1 / Codex / 飞书', '使用匹配的 org 定义。');
   const defaults = map(c.defaults, 'defaults'); shape(defaults, ['policy', 'model'], 'defaults');
-  if (!Array.isArray(c.admins) || c.admins.length || c.sync_enabled !== false) fail('UNSUPPORTED_ORG', '首版暂不自动授权管理命令或启用远端同步', '保留 admins: [] 和 sync_enabled: false。');
-  const result: Org = { id: id(c.id, 'company.id'), name: string(c.name, 'company.name'), timezone: string(c.timezone, 'timezone'), language: string(c.language, 'language'), members: [], missing: [] };
+  if (!Array.isArray(c.admins) || c.admins.length || typeof c.sync_enabled !== 'boolean') fail('UNSUPPORTED_ORG', '不自动授权网关管理命令，sync_enabled 必须为布尔值', '保留 admins: []，明确配置同步开关。');
+  const interval = c.sync_interval_min ?? 15;
+  if (typeof interval !== 'number' || !Number.isInteger(interval) || interval < 1 || interval > 1440) fail('INVALID_ORG', '同步周期须为 1–1440 分钟', '修正 sync_interval_min。');
+  const result: Org = { id: id(c.id, 'company.id'), name: string(c.name, 'company.name'), timezone: string(c.timezone, 'timezone'), language: string(c.language, 'language'), members: [], missing: [], syncEnabled: c.sync_enabled, syncIntervalMinutes: interval };
   new Intl.DateTimeFormat(result.language, { timeZone: result.timezone });
   const root = assertTree(vault, 'members', 'directory');
   const apps = new Set<string>(), users = new Set<string>();
@@ -83,7 +85,11 @@ export function loadOrg(vault: string): Org {
     const policy = string(r.fields.policy ?? defaults.policy, 'policy');
     if (!['readonly', 'workspace'].includes(policy)) fail('UNSUPPORTED_POLICY', `${memberId}: 不支持此权限策略`, '首版不启用 full；普通角色必须使用 readonly/workspace。');
     for (const key of ['vault_scope', 'skills']) if (!Array.isArray(r.fields[key])) fail('INVALID_ORG', `${roleId}.${key} 必须是列表`, '使用 [name] 或 []。');
-    if ((r.fields.skills as string[]).length) fail('UNSUPPORTED_SKILLS', '尚未部署的技能不能默认为生效', '先清空 skills；后续使用专门的技能部署管线。');
+    for (const name of r.fields.skills as string[]) {
+      id(name, 'skill');
+      const skill = read(`skills/${name}/SKILL.md`);
+      if (skill.fields.name !== name || typeof skill.fields.description !== 'string' || !skill.fields.description.trim()) fail('INVALID_SKILL', `${name} 缺少匹配的 name/description`, '修正技能 frontmatter。');
+    }
     const f = map(m.feishu, 'feishu'); shape(f, ['app_id', 'open_id'], `${memberId}.feishu`);
     const appId = string(f.app_id, 'app_id', true), openId = string(f.open_id, 'open_id', true);
     for (const [label, value, pattern, seen] of [['app_id', appId, /^cli_[a-zA-Z0-9]+$/, apps], ['open_id', openId, /^ou_[a-zA-Z0-9]+$/, users]] as const) {
@@ -93,7 +99,7 @@ export function loadOrg(vault: string): Org {
         seen.add(value);
       }
     }
-    result.members.push({ id: memberId, name: string(m.display_name, 'display_name'), role: roleId, policy, model: string(m.model, 'model', true) || string(r.fields.model, 'role.model', true) || string(defaults.model, 'defaults.model', true), appId, openId, roleBody: r.body, body: d.body });
+    result.members.push({ id: memberId, name: string(m.display_name, 'display_name'), role: roleId, roleTitle: string(r.fields.title, 'role.title'), policy, model: string(m.model, 'model', true) || string(r.fields.model, 'role.model', true) || string(defaults.model, 'defaults.model', true), appId, openId, roleBody: r.body, body: d.body, skills: r.fields.skills as string[] });
   }
   if (!result.members.length) fail('NO_MEMBERS', '没有启用成员', '至少启用一位真人成员。');
   return result;

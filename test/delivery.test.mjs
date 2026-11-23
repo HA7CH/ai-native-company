@@ -1,0 +1,24 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { deliveryTarget } from '../dist/delivery.js';
+test('delivery adapter binds recipient and rejects external, hidden, symlink and group files',t=>{
+  const root=fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(),'anc-delivery-')));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+  const home=path.join(root,'home'),state=path.join(root,'state');fs.mkdirSync(home);fs.mkdirSync(state);
+  const user=['ou','fixture'].join('_'),env={...process.env,CC_PROJECT:'fixture',CC_SESSION_KEY:'feishu:oc_fixture:'+user,FEISHU_VERIFIED_CHAT_MODE:'p2p'};
+  const mock=path.join(root,'gateway'),receipt=path.join(root,'receipt.json');fs.writeFileSync(mock,`#!${process.execPath}\nrequire('node:fs').writeFileSync(${JSON.stringify(receipt)},JSON.stringify(process.argv.slice(2)));console.log('MOCK_DELIVERY_OK');`,{mode:0o700});
+  const runtime={gateway:mock,members:[{home,project:'fixture',openId:user,delivery:true,filesystem:{[home]:'write',[path.join(home,'denied.pdf')]:'deny'}}]};
+  fs.writeFileSync(path.join(home,'result.pdf'),'fixture');fs.writeFileSync(path.join(home,'.private'),'private');fs.writeFileSync(path.join(root,'outside'),'private');fs.symlinkSync(path.join(root,'outside'),path.join(home,'link'));
+  assert(deliveryTarget(runtime,home,env,'result.pdf').file.endsWith('result.pdf'));
+  fs.writeFileSync(path.join(home,'denied.pdf'),'denied');
+  for(const p of ['../outside','.private','link','denied.pdf'])assert.throws(()=>deliveryTarget(runtime,home,env,p));
+  for(const extra of [{FEISHU_VERIFIED_CHAT_MODE:'group'},{CC_PROJECT:'other'},{CC_SESSION_KEY:'feishu:oc_fixture:ou_other'}])assert.throws(()=>deliveryTarget(runtime,home,{...env,...extra}));
+  fs.writeFileSync(path.join(state,'runtime.json'),JSON.stringify(runtime));
+  const input=[{jsonrpc:'2.0',id:1,method:'initialize',params:{protocolVersion:'2024-11-05'}},{jsonrpc:'2.0',id:2,method:'tools/call',params:{name:'send_attachment',arguments:{path:'../outside'}}},{jsonrpc:'2.0',id:3,method:'tools/call',params:{name:'send_attachment',arguments:{path:'result.pdf'}}}].map(x=>JSON.stringify(x)).join('\n')+'\n';
+  const r=spawnSync(process.execPath,[path.resolve('dist/cli.js'),'_delivery',state],{cwd:home,env,input,encoding:'utf8'});assert.equal(r.status,0,r.stderr);
+  const replies=r.stdout.trim().split('\n').map(x=>JSON.parse(x));assert(replies.find(x=>x.id===2).result.isError);assert.equal(replies.find(x=>x.id===3).result.content[0].text,'MOCK_DELIVERY_OK');
+  assert.deepEqual(JSON.parse(fs.readFileSync(receipt)),['send','--project','fixture','--session',env.CC_SESSION_KEY,'--file',path.join(home,'result.pdf')]);
+});

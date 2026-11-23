@@ -5,10 +5,11 @@ import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { acquireLock, assertTree, atomicWrite, canonicalRoot, exists, fail, json, privateDir, privateMode, readJSON, sha } from './common.js';
 import { templates, TEMPLATE_VERSION, type Identity } from './templates.js';
+import type { HostLayout, OperationsHost } from './layout.js';
 
 export interface InitInput { dir?: string; stateDir?: string; dryRun?: boolean; identity: Partial<Identity> }
 export interface Manifest { schemaVersion: 1; templateVersion: number; initializationId: string; status: 'initializing' | 'initialized'; vaultRoot: string; identity: Identity; files: Record<string, string> }
-export interface Host { schemaVersion: 1; companyId: string; vaultRoot: string; harness: 'codex'; gatewayVersion: string; codexPath?: string | null; gatewayPath?: string | null }
+export interface Host { schemaVersion: 1; companyId: string; vaultRoot: string; harness: 'codex'; gatewayVersion: string; codexPath?: string | null; gatewayPath?: string | null; layout?: HostLayout; operations?: OperationsHost }
 export function stateRoot(input?: string): string { return canonicalRoot(input ?? path.join(os.homedir(), '.anc')); }
 export function savedIdentity(stateDir?: string): Partial<Identity> {
   const p = path.join(stateRoot(stateDir), 'init-manifest.json');

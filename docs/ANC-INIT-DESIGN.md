@@ -180,7 +180,7 @@ vault 与 `~/.anc` 可能位于不同卷，不能承诺跨目录原子事务。�
 
 1. 只读盘点现有项目、成员、目录、服务 label、data_dir 和版本；检查过程中对 secret 脱敏。
 2. 整理 org 与主机配置，保留现有 wrapper、业务工具、会话和未建模选项；无法表达的差异是接管阻断项。
-3. 影子渲染对比，确认 persona 与权限的行为差异；计划中的接管入口为 `deploy config --adopt`（本版尚未实现），数量变化仍要求 `--allow-scale`。
+3. 影子渲染对比，确认 persona 与权限的行为差异；`anc adopt --plan` 准备现有服务，`deploy config --adopt` 显式切换，数量变化仍要求 `--allow-scale`。操作细节见 [托管运维](M1-HOSTED-OPERATIONS.md)。
 4. 备份、低峰切换、功能探针与回滚按 M1 原约定执行。
 
 `init` 不因探测到生产部署就自动成为迁移器。现有部署的接管和全新目录初始化共享 org/render 模块，但各自有明确入口和验收。

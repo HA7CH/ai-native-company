@@ -15,7 +15,9 @@
 - org 使用 `policy: readonly|workspace|full` 表达权限；普通角色禁止 full。Codex 的首次与 resume 均由适配器设置同一 named permissions profile，限定成员工作目录与知识目录、禁止直接网络访问；部署前实测读取边界与只读策略，失败禁止降级。
 - `vault_scope` 是职责路由，不能作为沙箱证明。初版共享公司概况与 knowledge；扩展业务目录须扩展受控文件白名单并验证。
 - 本机 secret 文件只作为受限键值数据解析，不当 shell 脚本执行；凭据不进入生成配置、plist、Git 或输出。
-- 本地 Git 是必备交付资产，远端同步显式配置；没有 remote 不创建定时 pull。初版启动 gateway，sync/watchdog 与既有部署接管仍按 M1 验收逐步补齐。
+- 本地 Git 是必备交付资产，远端同步显式配置；没有 remote 不创建定时 pull。gateway、sync/watchdog、技能部署和显式接管的操作约定见 [M1 托管运维](docs/M1-HOSTED-OPERATIONS.md)；实现通过不替代现场 M1 验收。
+- 旧业务库的 org 可放在 vault 内 `.anc-org/`，由本机 host 绑定唯一渲染源。保留旧项目名、cwd、data_dir 和业务正文，首次切换须 `--adopt`；未建模能力阻断迁移。
+- 附件回传可显式授予当前成员的窄 MCP 交付工具，调用既有 gateway；只允许已核验本人私聊和该 cwd 内文件，不授予角色直接网络访问或 full 权限。
 
 ## 1. 愿景与设计原则
 

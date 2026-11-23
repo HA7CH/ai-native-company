@@ -6,18 +6,26 @@ import type { Identity } from './templates.js';
 import { doctor } from './doctor.js';
 import { deploy, gateway, status, rollback } from './deploy.js';
 import { runCodex } from './codex-runner.js';
+import { deploySkills, rollbackSkills, skillStatus } from './skills.js';
+import { deployOperations, rollbackOperations, operationsStatus } from './operations.js';
+import { adopt } from './adopt.js';
+import { deliveryServer } from './delivery.js';
+import { selftest } from './selftest.js';
 
-const help = `anc — 飞书 × Codex 公司部署\n\nanc init [--dir PATH] [--state-dir PATH] [--dry-run] [--json]\n  --company-name NAME --company-id ID --member-name NAME --member-id ID\n  --harness codex --platform feishu --language zh-CN --timezone Asia/Shanghai\n  --non-interactive  缺少参数立即报错\nanc doctor [--dir PATH] [--state-dir PATH] [--probe] [--json]\nanc deploy config [--dir PATH] [--state-dir PATH] [--apply] [--allow-scale] [--json]\nanc status [--state-dir PATH] [--json]\nanc rollback [--state-dir PATH] [--json]\n\ninit 只初始化文件。deploy 默认预览，--apply 才启用 launchd。\n已有非受管部署不会自动接管；private 包尚未发布 npm。\n`;
+const help = "anc — 飞书 × Codex 公司部署\n\nanc init [--dir PATH] [--state-dir PATH] [--dry-run] [--json]\n  --company-name NAME --company-id ID --member-name NAME --member-id ID\n  --harness codex --platform feishu --language zh-CN --timezone Asia/Shanghai\n  --non-interactive  缺少参数立即报错\nanc adopt --plan PATH [--state-dir PATH] [--apply] [--json]\nanc doctor [--dir PATH] [--state-dir PATH] [--probe] [--json]\nanc deploy config|personas [--state-dir PATH] [--apply] [--adopt] [--allow-scale] [--json]\nanc deploy skills [--state-dir PATH] [--name NAME,NAME] [--prune] [--apply] [--json]\nanc deploy operations [--state-dir PATH] [--apply] [--json]\nanc status [--state-dir PATH] [--probe] [--json]\nanc rollback [skills|operations] [--state-dir PATH] [--json]\nanc selftest --sandbox [--json]\n\ninit 只初始化文件。adopt 只准备现有服务接管。deploy 默认预览。\n先 deploy skills --apply，再 doctor、deploy config --apply 与 deploy operations --apply。\n远端同步须单独配置；启用前核对仓库上传范围。\nprivate 包尚未发布 npm。\n";
 async function main() {
   const argv = process.argv.slice(2);
+  if (argv[0] === '_delivery') { if(argv.length!==2)throw Error(); deliveryServer(argv[1]!);return; }
   if (argv[0] === '_gateway') { if (argv.length !== 2) throw Error(); gateway(argv[1]!); return; }
   if (argv[0] === '_codex') { if (argv.length < 3) throw Error(); runCodex(argv[1]!, argv.slice(2)); return; }
   if (!argv.length || argv.includes('--help') || argv.includes('-h')) { console.log(help); return; }
   if (argv[0] === '--version') { console.log('0.1.0'); return; }
   const command = argv.shift();
-  if (command === 'deploy' && argv.shift() !== 'config') fail('UNKNOWN_COMMAND', '当前仅支持 anc deploy config', '运行 anc --help。', 2);
-  const booleans = new Set(['dry-run', 'json', 'non-interactive', 'probe', 'apply', 'allow-scale']);
-  const strings = new Set(['dir', 'state-dir', 'company-name', 'company-id', 'member-name', 'member-id', 'harness', 'platform', 'language', 'timezone']);
+  const target = command === 'deploy' ? argv.shift() : command === 'rollback' && argv[0] && !argv[0].startsWith('--') ? argv.shift() : undefined;
+  if (command === 'deploy' && !['config', 'personas', 'skills', 'operations'].includes(target ?? '')) fail('UNKNOWN_COMMAND', 'deploy 支持 config、personas、skills、operations', '运行 anc --help。', 2);
+  if (command === 'rollback' && target && !['skills', 'operations'].includes(target)) fail('UNKNOWN_COMMAND', 'rollback 子命令不支持此目标', '使用 rollback、rollback skills 或 rollback operations。', 2);
+  const booleans = new Set(['dry-run', 'json', 'non-interactive', 'probe', 'apply', 'allow-scale', 'prune', 'adopt', 'sandbox']);
+  const strings = new Set(['dir', 'state-dir', 'company-name', 'company-id', 'member-name', 'member-id', 'harness', 'platform', 'language', 'timezone', 'name', 'plan']);
   const opts: Record<string, string | boolean> = {};
   while (argv.length) {
     const arg = argv.shift()!;
@@ -30,14 +38,31 @@ async function main() {
       opts[key] = value;
     } else fail('UNKNOWN_OPTION', `未知参数 ${arg}`, '运行 anc --help。', 2);
   }
+  if (command === 'selftest') {
+    if(!opts.sandbox || Object.keys(opts).some(k=>!['sandbox','json'].includes(k)))fail('MISSING_INPUT','selftest 需要 --sandbox','运行 anc selftest --sandbox。',2);
+    process.stdout.write(json(await selftest()));return;
+  }
+  if (command === 'adopt') {
+    for (const key of Object.keys(opts)) if (!['plan','state-dir','apply','json','dry-run'].includes(key)) fail('UNKNOWN_OPTION', `adopt 不接受 --${key}`, '运行 anc --help。', 2);
+    if (!opts.plan || (opts.apply && opts['dry-run'])) fail('MISSING_INPUT', 'adopt 需要 --plan 且不能同时指定 apply/dry-run', '提供经核对的本机接管计划 JSON。', 2);
+    process.stdout.write(json(adopt({ plan: opts.plan as string, stateDir: opts['state-dir'] as string | undefined, apply: !!opts.apply })));
+    return;
+  }
   if (command === 'deploy' || command === 'status' || command === 'rollback') {
-    const allowed = command === 'deploy' ? ['dir', 'state-dir', 'json', 'apply', 'allow-scale', 'dry-run'] : ['dir', 'state-dir', 'json'];
+    const allowed = command === 'deploy' ? ['state-dir', 'json', 'apply', 'dry-run', ...(target === 'skills' ? ['prune', 'name'] : target === 'operations' ? [] : ['dir','allow-scale','adopt'])] : ['state-dir', 'json', ...(command === 'status' ? ['probe'] : [])];
     for (const key of Object.keys(opts)) if (!allowed.includes(key)) fail('UNKNOWN_OPTION', `${command} 不接受 --${key}`, '运行 anc --help。', 2);
     if (opts.apply && opts['dry-run']) fail('CONFLICTING_OPTIONS', '--apply 与 --dry-run 冲突', '选择预览或应用。', 2);
-    const input = { dir: opts.dir as string | undefined, stateDir: opts['state-dir'] as string | undefined, apply: !!opts.apply, allowScale: !!opts['allow-scale'] };
-    const result = command === 'deploy' ? await deploy(input) : command === 'rollback' ? await rollback(input) : status(input);
+    const input = { dir: opts.dir as string | undefined, stateDir: opts['state-dir'] as string | undefined, apply: !!opts.apply, allowScale: !!opts['allow-scale'], adopt: !!opts.adopt };
+    const result = command === 'deploy'
+      ? target === 'skills' ? deploySkills({ ...input, prune: !!opts.prune, names: typeof opts.name === 'string' ? opts.name.split(',').map(s => s.trim()) : undefined })
+        : target === 'operations' ? await deployOperations(input)
+        : await deploy({ ...input, view: target as 'config' | 'personas' })
+      : command === 'rollback' ? target === 'skills' ? rollbackSkills(input.stateDir) : target === 'operations' ? await rollbackOperations(input.stateDir) : await rollback(input)
+      : { ...status(input), skills: skillStatus(input.stateDir), operations: operationsStatus(input.stateDir), ...(opts.probe ? { probe: doctor({ ...input, probe: true }) } : {}) };
     process.stdout.write(json(result));
     if (command === 'status' && ['stopped', 'drift', 'not-deployed', 'recovery-required', 'unknown'].includes(result.status)) process.exitCode = 1;
+    if (command === 'status' && 'operations' in result && (result.operations.status !== 'current' || result.skills.status !== 'current')) process.exitCode = 1;
+    if ('probe' in result && result.probe?.status === 'blocked') process.exitCode = 1;
     return;
   }
   if (command === 'doctor') {
@@ -49,7 +74,7 @@ async function main() {
     return;
   }
   if (command !== 'init') fail('UNKNOWN_COMMAND', `未知命令 ${command}`, '运行 anc --help。', 2);
-  for (const key of ['probe', 'apply', 'allow-scale']) if (opts[key]) fail('UNKNOWN_OPTION', `init 不接受 --${key}`, '运行 anc --help。', 2);
+  for (const key of ['probe', 'apply', 'allow-scale', 'prune', 'name', 'adopt', 'plan', 'sandbox']) if (opts[key]) fail('UNKNOWN_OPTION', `init 不接受 --${key}`, '运行 anc --help。', 2);
   const identity: Partial<Identity> = {};
   for (const [flag, key] of Object.entries({ 'company-name': 'companyName', 'company-id': 'companyId', 'member-name': 'memberName', 'member-id': 'memberId', harness: 'harness', platform: 'platform', language: 'language', timezone: 'timezone' })) {
     if (opts[flag] !== undefined) (identity as Record<string, unknown>)[key] = opts[flag];

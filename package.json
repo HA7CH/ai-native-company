@@ -10,6 +10,7 @@
   },
   "files": [
     "dist",
+    "templates",
     "README.md",
     "LICENSE"
   ],
@@ -39,7 +40,8 @@
     "test": "tsc && node --test test/*.test.mjs tools/harness-proxy/harness-proxy.test.mjs",
     "prepack": "tsc && node scripts/prepare-bin.mjs",
     "test:launchd": "pnpm run build && node --test test/launchd.integration.mjs",
-    "test:runtime": "pnpm run build && node scripts/verify-codex-runtime.mjs"
+    "test:runtime": "pnpm run build && node scripts/verify-codex-runtime.mjs",
+    "test:watchdog": "pnpm run build && node --test test/watchdog.integration.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

@@ -9,6 +9,15 @@ export function fail(code: string, message: string, fix: string, exitCode = 1): 
   throw new AncError(code, message, fix, exitCode);
 }
 export function sha(text: string | Buffer): string { return createHash('sha256').update(text).digest('hex'); }
+export function isWithin(root: string, candidate: string): boolean {
+  const relative = path.relative(root, candidate);
+  return relative === '' || (!path.isAbsolute(relative) && relative !== '..' && !relative.startsWith('..' + path.sep));
+}
+// Resolve existing ancestors even when the final file has not been created yet.
+export function canonicalTarget(input: string): string {
+  const p = path.resolve(input);
+  return exists(p) ? fs.realpathSync(p) : path.join(canonicalTarget(path.dirname(p)),path.basename(p));
+}
 export function exists(p: string): boolean { try { fs.lstatSync(p); return true; } catch (e) { if ((e as NodeJS.ErrnoException).code === 'ENOENT') return false; throw e; } }
 export function readJSON<T>(p: string): T {
   try { return JSON.parse(fs.readFileSync(p, 'utf8')) as T; }
@@ -37,7 +46,7 @@ export function assertTree(root: string, relative: string, kind: 'file' | 'direc
   return cursor;
 }
 export function privateDir(p: string): void { fs.mkdirSync(p, { recursive: true, mode: 0o700 }); }
-export function atomicWrite(p: string, content: string, replace = false): void {
+export function atomicWrite(p: string, content: string | Buffer, replace = false): void {
   privateDir(path.dirname(p));
   const temp = path.join(path.dirname(p), `.anc-${randomUUID()}.tmp`);
   const fd = fs.openSync(temp, 'wx', 0o600);
