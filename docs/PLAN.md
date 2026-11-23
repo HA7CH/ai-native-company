@@ -23,7 +23,7 @@
 - [x] `anc deploy personas|skills`、`anc status`
 - [ ] 验收:Climax 生产从手工脚本切到 `anc` 命令面,行为不回退;一台测试 mini 从零拉起 demo 公司 ≤ 1 小时人工时间
 
-当前现场待验收：新部署的各成员真实消息与附件回传、私有远端上传范围核对和同步、第二 macOS 用户新装及恢复。原 reference deployment 不在本地，不能用当前公司的迁移替代该生产环境的验收结论。`status --usage` 的 Codex 用量汇总延至 M4，不调用 Claude 专有 `/cost`。
+当前现场待验收：新部署的各成员真实消息与附件回传、第二 macOS 用户新装及恢复。私有远端的上传、恢复副本比对和后台同步须分别验证，不能以交互式上传成功代替后台任务验收。原 reference deployment 不在本地，不能用当前公司的迁移替代该生产环境的验收结论。`status --usage` 的 Codex 用量汇总延至 M4，不调用 Claude 专有 `/cost`。
 
 ## M2 — 对话式 onboarding + 自动入库
 
